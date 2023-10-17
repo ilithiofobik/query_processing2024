@@ -1,0 +1,6 @@
+bin/
+target/
+*.out
+.DS_Store
+perf*
+.gdb_history
