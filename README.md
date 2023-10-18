@@ -15,9 +15,9 @@ Complete each assignment until the following session (Tuesday 23:59).
   - link: https://github.com/oneapi-src/oneTBB
   - debian: `apt install libtbb2 libtbb2-dev`
 
-## Task 1: Manual Join
+## Task 1: Aggregation and Manual Join
 
-Manually implement the given query in `bin/manualjoin.cpp`.
+Manually implement the given queries in `bin/manualjoin.cpp` and `bin/aggregation.cpp`.
 
 Build:
 ``` sh

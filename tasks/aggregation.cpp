@@ -1,6 +1,7 @@
 #include <cmath>
 #include <fcntl.h>
 #include <iostream>
+#include <string>
 #include <qp/common/perfevent.hpp>
 #include <p2c/io.hpp>
 #include <p2c/tpch.hpp>
@@ -12,25 +13,25 @@ using namespace p2c;
 inline double roundPrice(double a) { return ceil(a * 100.0) / 100.0; }
 
 /**
- * select count(*), sum(o_totalprice - l_discount)
- * from orders o, lineitem l
- * where l_orderkey = o_orderkey
- * and o_totalprice > 1000
- * */
-std::pair<int64_t, double> manual_join(unsigned threads, const TPCH& database) {
+* select o_clerk, max(o_totalprice) as max_order
+* from orders
+* group by o_clerk
+* order by max_order desc
+* limit 1
+* */
+std::pair<std::string, double> manual_aggregation(const TPCH& database) {
     // TODO: Implement me!
-    return std::make_pair(0, 0);
+    return std::make_pair("Viktor Leis", 0);
 }
 
 int main(int argc, char* argv[]) {
-    if (argc != 3) {
-        std::cout << "Usage: " << argv[0] << " [tpch-dir] [threads]" << std::endl;
+    if (argc != 2) {
+        std::cout << "Usage: " << argv[0] << " [tpch-dir]" << std::endl;
         return 1;
     }
     std::string tpch_folder(argv[1]);
-    auto tpch_scale = tpch_folder.substr(tpch_folder.find_last_of('/') + 1);
-    unsigned threads = atoi(argv[2]);
 
+    auto tpch_scale = tpch_folder.substr(tpch_folder.find_last_of('/') + 1);
     TPCH db(tpch_folder);
 
     BenchmarkParameters params;
@@ -40,13 +41,13 @@ int main(int argc, char* argv[]) {
     params.setParam("impl", "hyper");
 
     for (auto i = 0u; i != 10; ++i) {
-        int64_t count;
-        double sum;
+        std::string clerk;
+        double max_order;
         {
             PerfEventBlock perf(db.orders.tupleCount, params, i == 0);
-            std::tie(count, sum) = manual_join(threads, db);
+            std::tie(clerk, max_order) = manual_aggregation(db);
         }
-        std::cerr << count << " | " << sum << std::endl;
+        std::cerr << clerk << " | " << max_order << std::endl;
     }
 
     return 0;
