@@ -35,9 +35,9 @@ int main(int argc, char* argv[]) {
     TPCH db(tpch_folder);
 
     BenchmarkParameters params;
-    params.setParam("task", "manualjoin");
+    params.setParam("task", "manualaggregation");
     params.setParam("workload", tpch_scale);
-    params.setParam("variant", "x > 1000");
+    params.setParam("variant", "limit 1");
     params.setParam("impl", "hyper");
 
     for (auto i = 0u; i != 10; ++i) {
