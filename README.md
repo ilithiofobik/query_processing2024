@@ -13,7 +13,8 @@ Complete each assignment until the following session (Tuesday 23:59).
 - make
 - the thread building blocks library
   - link: https://github.com/oneapi-src/oneTBB
-  - debian: `apt install libtbb2 libtbb2-dev`
+  - debian: `apt install libtbb-dev` (this is the new oneapi tbb)
+- TPC-H data: https://tumde-my.sharepoint.com/personal/till_steinert_tum_de/_layouts/15/onedrive.aspx?id=%2Fpersonal%2Ftill%5Fsteinert%5Ftum%5Fde%2FDocuments%2FTPCHData&ga=1
 
 ## Task 1: Aggregation and Manual Join
 
@@ -33,7 +34,7 @@ bin/manualjoin.out
 Debug:
 
 ``` sh
-gdb bin/manualjoin.out
+gdb --args bin/manualjoin.out [arguments]
 ```
 
 Performance build:
