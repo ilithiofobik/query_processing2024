@@ -3,17 +3,20 @@
 #include <iostream>
 #include <atomic>
 #include <mutex> 
-#include <unordered_map>
 #include <qp/common/perfevent.hpp>
 #include <p2c/io.hpp>
 #include <p2c/tpch.hpp>
 #include <p2c/types.hpp>
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_range.h>
+#include <tbb/concurrent_hash_map.h>
 
 using namespace p2c;
 
 inline double roundPrice(double a) { return ceil(a * 100.0) / 100.0; }
+
+tbb::concurrent_hash_map<int64_t, double> totalprice_map;
+typedef tbb::concurrent_hash_map<int64_t, double>::accessor PriceAccessor;
 
 /**
  * select count(*), sum(o_totalprice - l_discount)
@@ -28,26 +31,28 @@ std::pair<int64_t, double> manual_join(unsigned threads, const TPCH& db) {
 
     uint64_t num_of_orders = db.orders.tupleCount;
     uint64_t num_of_lineitem = db.lineitem.tupleCount;
+    auto o_range = tbb::blocked_range<size_t>(0, num_of_orders, num_of_orders / threads);
     auto l_range = tbb::blocked_range<size_t>(0, num_of_lineitem, num_of_lineitem / threads);
-
-    std::unordered_map<int64_t, double> totalprice_map;
-
-    // add all totalprices to a local map
-    for (uint64_t o = 0; o < num_of_orders; o++) {
-        int64_t o_orderkey = db.orders.o_orderkey[o];
-        double o_totalprice = db.orders.o_totalprice[o];
-        std::pair<int64_t, double> pair = std::make_pair(o_orderkey, o_totalprice);
-        totalprice_map.insert(pair);
-    }
+    
+    tbb::parallel_for(o_range, [&](const decltype(o_range)& r) {
+        // add all totalprices to a concurrent map
+        for (uint64_t o = r.begin(); o < r.end(); o++) {
+            int64_t o_orderkey = db.orders.o_orderkey[o];
+            double o_totalprice = db.orders.o_totalprice[o];
+            totalprice_map.emplace(o_orderkey, o_totalprice);
+        }
+    });
 
     tbb::parallel_for(l_range, [&](const decltype(l_range)& r) {
         int64_t local_count = 0;
         double local_sum = 0.0;
+        PriceAccessor accessor;
 
         // iterate over lineitems for given thread
         for (uint64_t l = r.begin(); l < r.end(); l++) {    
             int64_t l_orderkey = db.lineitem.l_orderkey[l];
-            double o_totalprice = totalprice_map[l_orderkey];
+            totalprice_map.find(accessor, l_orderkey);
+            double o_totalprice = accessor->second;
             // if price > 1000.0 count and add totalprice-discount to the sum
             if (o_totalprice > 1000.0) {
                 local_count += 1;
