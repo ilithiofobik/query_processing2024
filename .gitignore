@@ -4,3 +4,5 @@ target/
 .DS_Store
 perf*
 .gdb_history
+.vscode/
+data/
