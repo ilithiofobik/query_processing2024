@@ -28,10 +28,7 @@ std::pair<int64_t, double> manual_join(unsigned threads, const TPCH& db) {
 
     uint64_t num_of_orders = db.orders.tupleCount;
     uint64_t num_of_lineitem = db.lineitem.tupleCount;
-
-    uint64_t l_grainsize = (num_of_lineitem % threads == 0) ? (num_of_lineitem / threads) : (num_of_lineitem / threads + 1);
-
-    auto range = tbb::blocked_range<size_t>(0, threads);
+    auto l_range = tbb::blocked_range<size_t>(0, num_of_lineitem, num_of_lineitem / threads);
 
     std::unordered_map<int64_t, double> totalprice_map;
 
@@ -43,17 +40,15 @@ std::pair<int64_t, double> manual_join(unsigned threads, const TPCH& db) {
         totalprice_map.insert(pair);
     }
 
-    tbb::parallel_for(range, [&](const decltype(range)& r) {
-        uint64_t l_start = r.begin() * l_grainsize;
-        uint64_t l_end = std::min(r.end() * l_grainsize, num_of_lineitem);
-
+    tbb::parallel_for(l_range, [&](const decltype(l_range)& r) {
         int64_t local_count = 0;
         double local_sum = 0.0;
 
-        // if price > 1000.0 count and add totalprice-discount to the sum
-        for (uint64_t l = l_start; l < l_end; l++) {    
+        // iterate over lineitems for given thread
+        for (uint64_t l = r.begin(); l < r.end(); l++) {    
             int64_t l_orderkey = db.lineitem.l_orderkey[l];
             double o_totalprice = totalprice_map[l_orderkey];
+            // if price > 1000.0 count and add totalprice-discount to the sum
             if (o_totalprice > 1000.0) {
                 local_count += 1;
                 local_sum += o_totalprice - db.lineitem.l_discount[l];
@@ -63,7 +58,7 @@ std::pair<int64_t, double> manual_join(unsigned threads, const TPCH& db) {
         count.fetch_add(local_count);
         
         mtx.lock();
-        sum += local_sum;
+        sum += local_sum; // no fetch_add for double
         mtx.unlock();
     });
 
