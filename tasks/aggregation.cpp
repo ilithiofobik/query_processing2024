@@ -19,9 +19,20 @@ inline double roundPrice(double a) { return ceil(a * 100.0) / 100.0; }
 * order by max_order desc
 * limit 1
 * */
-std::pair<std::string, double> manual_aggregation(const TPCH& database) {
-    // TODO: Implement me!
-    return std::make_pair("Viktor Leis", 0);
+std::pair<std::string, double> manual_aggregation(const TPCH& db) {
+    auto o_clerk = db.orders.o_clerk[0];
+    double max_o_totalprice = db.orders.o_totalprice[0];
+    uint64_t num_of_orders = db.orders.tupleCount;
+
+    for (uint64_t o = 1; o < num_of_orders; o++) {
+        auto o_totalprice = db.orders.o_totalprice[o];
+        if (max_o_totalprice < o_totalprice) {
+            o_clerk = db.orders.o_clerk[o];
+            max_o_totalprice = o_totalprice;
+        }
+    }
+
+    return std::make_pair(std::string(o_clerk), max_o_totalprice);
 }
 
 int main(int argc, char* argv[]) {
