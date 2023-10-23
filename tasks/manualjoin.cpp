@@ -16,7 +16,7 @@ using namespace p2c;
 
 inline double roundPrice(double a) { return ceil(a * 100.0) / 100.0; }
 
-typedef tbb::concurrent_hash_map<int64_t, double>::accessor PriceAccessor;
+typedef tbb::concurrent_hash_map<int64_t, double>::const_accessor PriceAccessor;
 
 /**
  * select count(*), sum(o_totalprice - l_discount)
