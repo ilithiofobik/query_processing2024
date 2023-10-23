@@ -1,8 +1,7 @@
 #include <cmath>
 #include <fcntl.h>
 #include <iostream>
-#include <atomic>
-#include <mutex> 
+#include <numeric>
 #include <cassert> 
 #include <qp/common/perfevent.hpp>
 #include <p2c/io.hpp>
@@ -11,6 +10,7 @@
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_range.h>
 #include <tbb/concurrent_hash_map.h>
+#include <tbb/enumerable_thread_specific.h>
 
 using namespace p2c;
 
@@ -25,32 +25,32 @@ typedef tbb::concurrent_hash_map<int64_t, double>::const_accessor PriceAccessor;
  * and o_totalprice > 1000
  * */
 std::pair<int64_t, double> manual_join(unsigned threads, const TPCH& db) {
-    // atomic to collect all threads counts
-    std::atomic<int64_t> count{0};
-    double sum = 0.0;
-    std::mutex mtx; // using mutex to add sum, no fetch_add for atomic<double>
+    // for count(*)
+    tbb::enumerable_thread_specific<int64_t> count;
+    // for sum(o_totalprice - l_discount)
+    tbb::enumerable_thread_specific<double> sum;
 
     uint64_t num_of_orders = db.orders.tupleCount;
     uint64_t num_of_lineitem = db.lineitem.tupleCount;
+    
     // each thread will take a part of orders
-    auto o_range = tbb::blocked_range<size_t>(0, num_of_orders, num_of_orders / threads);
+    auto o_range = tbb::blocked_range<uint64_t>(0, num_of_orders, num_of_orders / threads);
     // and a part of lineitems
-    auto l_range = tbb::blocked_range<size_t>(0, num_of_lineitem, num_of_lineitem / threads);
+    auto l_range = tbb::blocked_range<uint64_t>(0, num_of_lineitem, num_of_lineitem / threads);
 
+    // shared by all threads
     tbb::concurrent_hash_map<int64_t, double> o_totalprice_map;
     
-    tbb::parallel_for(o_range, [&](const decltype(o_range)& r) {
+    tbb::parallel_for(o_range, [&](auto r) {
         // add current thread's totalprices to a concurrent map
         for (uint64_t o = r.begin(); o < r.end(); o++) {
-            int64_t o_orderkey = db.orders.o_orderkey[o];
-            double o_totalprice = db.orders.o_totalprice[o];
-            o_totalprice_map.emplace(o_orderkey, o_totalprice);
+            o_totalprice_map.emplace(db.orders.o_orderkey[o], db.orders.o_totalprice[o]);
         }
     });
 
-    tbb::parallel_for(l_range, [&](const decltype(l_range)& r) {
-        int64_t local_count = 0;
-        double local_sum = 0.0;
+    tbb::parallel_for(l_range, [&](auto r) {
+        int64_t& local_count = count.local();
+        double& local_sum = sum.local();
         PriceAccessor accessor;
 
         // iterate over lineitems for given thread
@@ -66,15 +66,12 @@ std::pair<int64_t, double> manual_join(unsigned threads, const TPCH& db) {
                 local_sum += o_totalprice - db.lineitem.l_discount[l];
             }
         }
-
-        count.fetch_add(local_count);
-        
-        mtx.lock();
-        sum += local_sum; // no fetch_add for double
-        mtx.unlock();
     });
 
-    return std::make_pair(count.load(), sum);
+    int64_t count_out = std::accumulate(count.begin(), count.end(), 0);
+    double sum_out = std::accumulate(sum.begin(), sum.end(), 0.0);
+
+    return std::make_pair(count_out, sum_out);
 }
 
 int main(int argc, char* argv[]) {
