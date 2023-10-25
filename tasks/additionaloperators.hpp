@@ -1,0 +1,191 @@
+#include <cassert>
+#include <algorithm>
+#include <functional>
+#include <iostream>
+#include <string>
+#include <vector>
+#include <fmt/core.h>
+#include <fmt/ranges.h>
+#include <string>
+#include <string_view>
+#include <sstream>
+#include <p2c/io.hpp>
+#include <p2c/tpch.hpp>
+#include <p2c/types.hpp>
+#include <p2c/foundations.hpp>
+
+using namespace std;
+using namespace fmt;
+using namespace p2c;
+
+// sort operator
+struct Sort : public Operator {
+   unique_ptr<Operator> input;
+   vector<IU*> keyIUs;
+   IU v{"vector", Type::Undefined};
+   bool desc;
+
+   // constructor
+   Sort(unique_ptr<Operator> input, const vector<IU*>& keyIUs, bool desc = false) : input(std::move(input)), keyIUs(keyIUs), desc(desc)  {}
+
+   // destructor
+   ~Sort() {}
+
+   IUSet availableIUs() override {
+      return input->availableIUs();
+   }
+
+   void produce(const IUSet& required, ConsumerFn consume) override {
+      throw std::logic_error("Implement me!");
+   };
+};
+
+// map operator (compute new value)
+struct Map : public Operator {
+   unique_ptr<Operator> input;
+   unique_ptr<Exp> exp;
+   IU iu;
+
+   // constructor
+   Map(unique_ptr<Operator> input, unique_ptr<Exp> exp, const string& name, Type type) : input(std::move(input)), exp(std::move(exp)), iu{name, type} {}
+
+   // destructor
+   ~Map() {}
+
+   IUSet availableIUs() override {
+      return input->availableIUs() | IUSet({&iu});
+   }
+
+   void produce(const IUSet& required, ConsumerFn consume) override {
+      throw std::logic_error("Implement me!");
+   }
+
+   IU* getIU(const string& attName) {
+      if (iu.name == attName)
+         return &iu;
+      throw;
+   }
+};
+
+// group by operator
+struct GroupBy : public Operator {
+   // TODO: Implement MAX and AVG
+   enum AggFunction { Sum, Count };
+
+   struct Aggregate {
+      AggFunction aggFn; // aggregate function
+      IU* inputIU; // IU to aggregate (is nullptr when aggFn==Count)
+      IU resultIU;
+   };
+
+   unique_ptr<Operator> input;
+   IUSet groupKeyIUs;
+   vector<Aggregate> aggs;
+   IU ht{"aggHT", Type::Undefined};
+
+   // constructor
+   GroupBy(unique_ptr<Operator> input, const IUSet& groupKeyIUs) : input(std::move(input)), groupKeyIUs(groupKeyIUs) {}
+
+   // destructor
+   ~GroupBy() {}
+
+   void addCount(const string& name) {
+      aggs.push_back({AggFunction::Count, nullptr, {name, Type::Integer}});
+   }
+
+   void addSum(const string& name, IU* inputIU) {
+      aggs.push_back({AggFunction::Sum, inputIU, {name, inputIU->type}});
+   }
+
+   vector<IU*> resultIUs() {
+      vector<IU*> v;
+      for (auto&[fn, inputIU, resultIU] : aggs)
+         v.push_back(&resultIU);      
+      return v;
+   }
+
+   IUSet inputIUs() {
+      IUSet v;
+      for (auto&[fn, inputIU, resultIU] : aggs)
+         if (inputIU)
+            v.add(inputIU);
+      return v;
+   }
+
+   IUSet availableIUs() override {
+      return groupKeyIUs | IUSet(resultIUs());
+   }
+
+   void produce(const IUSet& required, ConsumerFn consume) override {
+      // build hash table
+      print("unordered_map<tuple<{}>, tuple<{}>> {};\n", formatTypes(groupKeyIUs.v), formatTypes(resultIUs()), ht.varname);
+      input->produce(groupKeyIUs | inputIUs(), [&]() {
+         // insert tuple into hash table
+         print("auto it = {}.find({{{}}});\n", ht.varname, formatVarnames(groupKeyIUs.v));
+         genBlock(format("if (it == {}.end())", ht.varname), [&]() {
+            vector<string> initValues;
+            for (auto&[fn, inputIU, resultIU] : aggs) {
+               switch (fn) {
+                  case (AggFunction::Sum): initValues.push_back(inputIU->varname); break;
+                  case (AggFunction::Count): initValues.push_back("1"); break;
+               }
+            }
+            // insert new group
+            print("{}.insert({{{{{}}}, {{{}}}}});\n", ht.varname, formatVarnames(groupKeyIUs.v), fmt::join(initValues, ","));
+         });
+         genBlock("else", [&]() {
+            // update group
+            unsigned i=0;
+            for (auto&[fn, inputIU, resultIU] : aggs) {
+               switch (fn) {
+                  case (AggFunction::Sum): print("get<{}>(it->second) += {};\n", i, inputIU->varname); break;
+                  case (AggFunction::Count): print("get<{}>(it->second)++;\n", i); break;
+               }
+               i++;
+            }
+         });
+      });
+
+      // iterate over hash table
+      genBlock(format("for (auto& it : {})", ht.varname), [&]() {
+         for (unsigned i=0; i<groupKeyIUs.size(); i++) {
+            IU* iu = groupKeyIUs.v[i];
+            if (required.contains(iu))
+               provideIU(iu, format("get<{}>(it.first)", i));
+         }
+         unsigned i=0;
+         for (auto&[fn, inputIU, resultIU] : aggs) {
+            provideIU(&resultIU, format("get<{}>(it.second)", i));
+            i++;
+         }
+         consume();
+      });
+   }
+
+   IU* getIU(const string& attName) {
+      for (auto&[fn, inputIU, resultIU] : aggs)
+         if (resultIU.name == attName)
+            return &resultIU;
+      throw;
+   }
+};
+
+// skyline/pareto operator
+struct Pareto : public Operator {
+   unique_ptr<Operator> input;
+   vector<IU*> compareKeyIUs;
+
+   // constructor
+   Pareto(unique_ptr<Operator> input, const vector<IU*>& compareKeyIUs) : input(std::move(input)), compareKeyIUs(compareKeyIUs)  {}
+
+   // destructor
+   ~Pareto() {}
+
+   IUSet availableIUs() override {
+      return input->availableIUs();
+   }
+
+   void produce(const IUSet& required, ConsumerFn consume) override {
+      throw std::logic_error("Implement me!");
+   };
+};
