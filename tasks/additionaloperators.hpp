@@ -100,15 +100,15 @@ struct GroupBy : public Operator {
    vector<IU*> resultIUs() {
       vector<IU*> v;
       for (auto&[fn, inputIU, resultIU] : aggs)
-         v.push_back(&resultIU);
+         v.push_back(&resultIU);      
       return v;
    }
 
-   vector<IU*> inputIUs() {
-      vector<IU*> v;
+   IUSet inputIUs() {
+      IUSet v;
       for (auto&[fn, inputIU, resultIU] : aggs)
          if (inputIU)
-            v.push_back(inputIU);
+            v.add(inputIU);
       return v;
    }
 
@@ -119,7 +119,7 @@ struct GroupBy : public Operator {
    void produce(const IUSet& required, ConsumerFn consume) override {
       // build hash table
       print("unordered_map<tuple<{}>, tuple<{}>> {};\n", formatTypes(groupKeyIUs.v), formatTypes(resultIUs()), ht.varname);
-      input->produce(groupKeyIUs | IUSet(inputIUs()), [&]() {
+      input->produce(groupKeyIUs | inputIUs(), [&]() {
          // insert tuple into hash table
          print("auto it = {}.find({{{}}});\n", ht.varname, formatVarnames(groupKeyIUs.v));
          genBlock(format("if (it == {}.end())", ht.varname), [&]() {
