@@ -370,14 +370,24 @@ unique_ptr<Exp> makeCallExp(const string& fn,  std::unique_ptr<T>... args) {
 }
 
 // Print
-void produceAndPrint(unique_ptr<Operator> root, const std::vector<IU*>& ius, unsigned perfRepeat = 2) {
+void produceAndPrint(unique_ptr<Operator> root, const std::vector<IU*>& ius, unsigned perfRepeat = 2, uint64_t offset = 0, int64_t count = -1) {
    genBlock(
       format("for (uint64_t {0} = 0; {0} != {1}; {0}++)", genVar("perfRepeat"), perfRepeat - 1),
       [&]() {
+         IU mat{"row", Type::BigInt};
+         provideIU(&mat, "0");
          root->produce(IUSet(ius), [&]() {
-            for (IU *iu : ius)
-               print("cerr << {} << \" \";", iu->varname);
-            print("cerr << endl;\n");
+            auto if_in_offset = format("if ({0} >= {1} && {0} < {2})", mat.varname, to_string(offset), to_string(offset+count));
+            if (count == -1) {
+               if_in_offset  = format("if ({0} >= {1})", mat.varname, to_string(offset));
+            }
+            genBlock(if_in_offset,
+            [&]() {
+               for (IU *iu : ius)
+                  print("cerr << {} << \" \";", iu->varname);
+               print("cerr << endl;\n");
+            });
+            print("{}++;", mat.varname);
          });
       });
 }
