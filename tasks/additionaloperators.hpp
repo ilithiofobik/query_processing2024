@@ -69,8 +69,7 @@ struct Map : public Operator {
 
 // group by operator
 struct GroupBy : public Operator {
-   // TODO: Implement MAX and AVG
-   enum AggFunction { Sum, Count };
+   enum AggFunction { Sum, Count, Max, AvgSum, AvgCnt };
 
    struct Aggregate {
       AggFunction aggFn; // aggregate function
@@ -95,6 +94,15 @@ struct GroupBy : public Operator {
 
    void addSum(const string& name, IU* inputIU) {
       aggs.push_back({AggFunction::Sum, inputIU, {name, inputIU->type}});
+   }
+
+   void addMax(const string& name, IU* inputIU) {
+      aggs.push_back({AggFunction::Max, inputIU, {name, inputIU->type}});
+   }
+
+   void addAvg(const string& name, IU* inputIU) {
+      aggs.push_back({AggFunction::AvgSum, inputIU, {name, inputIU->type}});
+      aggs.push_back({AggFunction::AvgCnt, nullptr, {name, Type::Integer}});
    }
 
    vector<IU*> resultIUs() {
@@ -126,8 +134,14 @@ struct GroupBy : public Operator {
             vector<string> initValues;
             for (auto&[fn, inputIU, resultIU] : aggs) {
                switch (fn) {
-                  case (AggFunction::Sum): initValues.push_back(inputIU->varname); break;
-                  case (AggFunction::Count): initValues.push_back("1"); break;
+                  case (AggFunction::Sum): case (AggFunction::Max):case (AggFunction::AvgSum): {
+                     initValues.push_back(inputIU->varname); 
+                     break;
+                  }
+                  case (AggFunction::Count): case (AggFunction::AvgCnt): {
+                     initValues.push_back("1"); 
+                     break;
+                  }
                }
             }
             // insert new group
@@ -138,8 +152,17 @@ struct GroupBy : public Operator {
             unsigned i=0;
             for (auto&[fn, inputIU, resultIU] : aggs) {
                switch (fn) {
-                  case (AggFunction::Sum): print("get<{}>(it->second) += {};\n", i, inputIU->varname); break;
-                  case (AggFunction::Count): print("get<{}>(it->second)++;\n", i); break;
+                  case (AggFunction::Sum): case (AggFunction::AvgSum): {
+                     print("get<{}>(it->second) += {};\n", i, inputIU->varname); 
+                     break;
+                  }
+                  case (AggFunction::Count): case (AggFunction::AvgCnt): {
+                     print("get<{}>(it->second)++;\n", i); break;
+                  }
+                  case (AggFunction::Max): {
+                     print("get<{0}>(it->second) = max(get<{0}>(it->second), {1});\n", i, inputIU->varname); 
+                     break;
+                  }
                }
                i++;
             }
@@ -155,7 +178,18 @@ struct GroupBy : public Operator {
          }
          unsigned i=0;
          for (auto&[fn, inputIU, resultIU] : aggs) {
-            provideIU(&resultIU, format("get<{}>(it.second)", i));
+            switch (fn) {
+               case (AggFunction::Sum): case (AggFunction::Count): case (AggFunction::Max): {
+                  provideIU(&resultIU, format("get<{}>(it.second)", i)); 
+                  break;
+               }
+               case (AggFunction::AvgSum): {
+                  provideIU(&resultIU, format("get<{}>(it.second) / (({})get<{}>(it.second))", i, tname(resultIU.type), i + 1));
+                  i++; 
+                  break;
+               }
+               case (AggFunction::AvgCnt): break;
+            }
             i++;
          }
          consume();
