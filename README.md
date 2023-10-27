@@ -15,6 +15,7 @@ Complete each assignment until the following session (Tuesday 23:59).
   - link: https://github.com/oneapi-src/oneTBB
   - debian: `apt install libtbb-dev` (this is the new oneapi tbb)
 - formatting lib: `apt install libfmt-dev`
+- clang-format for p2c: `apt install clang-format`
 - TPC-H data: https://tumde-my.sharepoint.com/:f:/g/personal/till_steinert_tum_de/EgF_hW0dMfVKnQINJUiynt8BOadVns6K53A8Hd-Hcnjbzw?e=mHZBGr
 
 ## Task 1: Aggregation and Manual Join
