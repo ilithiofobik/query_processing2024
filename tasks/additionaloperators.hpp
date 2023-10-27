@@ -89,20 +89,20 @@ struct GroupBy : public Operator {
    ~GroupBy() {}
 
    void addCount(const string& name) {
-      aggs.push_back({AggFunction::Count, nullptr, {name, Type::Integer}});
+      addAsInt(AggFunction::Count, name);
    }
 
    void addSum(const string& name, IU* inputIU) {
-      aggs.push_back({AggFunction::Sum, inputIU, {name, inputIU->type}});
+      addAsType(AggFunction::Sum, name, inputIU);
    }
 
    void addMax(const string& name, IU* inputIU) {
-      aggs.push_back({AggFunction::Max, inputIU, {name, inputIU->type}});
+      addAsType(AggFunction::Max, name, inputIU);
    }
 
    void addAvg(const string& name, IU* inputIU) {
-      aggs.push_back({AggFunction::AvgSum, inputIU, {name, inputIU->type}});
-      aggs.push_back({AggFunction::AvgCnt, nullptr, {name, Type::Integer}});
+      addAsType(AggFunction::AvgSum, name, inputIU);
+      addAsInt(AggFunction::AvgCnt, name);
    }
 
    vector<IU*> resultIUs() {
@@ -157,7 +157,8 @@ struct GroupBy : public Operator {
                      break;
                   }
                   case (AggFunction::Count): case (AggFunction::AvgCnt): {
-                     print("get<{}>(it->second)++;\n", i); break;
+                     print("get<{}>(it->second)++;\n", i); 
+                     break;
                   }
                   case (AggFunction::Max): {
                      print("get<{0}>(it->second) = max(get<{0}>(it->second), {1});\n", i, inputIU->varname); 
@@ -184,8 +185,8 @@ struct GroupBy : public Operator {
                   break;
                }
                case (AggFunction::AvgSum): {
-                  provideIU(&resultIU, format("get<{}>(it.second) / (({})get<{}>(it.second))", i, tname(resultIU.type), i + 1));
-                  i++; 
+                  provideIU(&resultIU, format("get<{}>(it.second) / get<{}>(it.second)", i, i + 1));
+                  i++; // ignore AvgCnt
                   break;
                }
                case (AggFunction::AvgCnt): break;
@@ -202,6 +203,15 @@ struct GroupBy : public Operator {
             return &resultIU;
       throw;
    }
+
+   private:
+      void addAsType(AggFunction af, const string& name, IU* inputIU) {
+         aggs.push_back({af, inputIU, {name, inputIU->type}});
+      }
+
+      void addAsInt(AggFunction af, const string& name) {
+         aggs.push_back({af, nullptr, {name, Type::Integer}});
+      }
 };
 
 // skyline/pareto operator
