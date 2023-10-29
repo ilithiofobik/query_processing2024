@@ -57,10 +57,11 @@ struct Map : public Operator {
    }
 
    void produce(const IUSet& required, ConsumerFn consume) override {
-      input->produce(required - IUSet({&iu}), [&]() {
+      input->produce((required | exp->iusUsed()) - IUSet({&iu}), [&]() {
          // set the iu to exp value
          provideIU(&iu, exp->compile());
-         // let the consumer take care of required but iu
+         // let the consumer take care of required + expIus without iu 
+         // as the iu is not a part of the database
          consume();
       });
    }
