@@ -56,14 +56,11 @@ struct Map : public Operator {
       return input->availableIUs() | IUSet({&iu});
    }
 
-   // make_unique<Map>(std::move(sel), makeCallExp("std::plus()", nr, 5), "nrNew", Type::Integer); 
-   // input -> sel 
-   // exp -> Exp // std::plus nr 5 
-   // iu -> nrNew // type::INteger
-
    void produce(const IUSet& required, ConsumerFn consume) override {
       input->produce(required - IUSet({&iu}), [&]() {
+         // set the iu to exp value
          provideIU(&iu, exp->compile());
+         // let the consumer take care of required but iu
          consume();
       });
    }
