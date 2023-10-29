@@ -37,7 +37,7 @@ struct Sort : public Operator {
 
    void produce(const IUSet& required, ConsumerFn consume) override {
       throw std::logic_error("Implement me!");
-   };
+   }
 };
 
 // map operator (compute new value)
@@ -56,8 +56,16 @@ struct Map : public Operator {
       return input->availableIUs() | IUSet({&iu});
    }
 
+   // make_unique<Map>(std::move(sel), makeCallExp("std::plus()", nr, 5), "nrNew", Type::Integer); 
+   // input -> sel 
+   // exp -> Exp // std::plus nr 5 
+   // iu -> nrNew // type::INteger
+
    void produce(const IUSet& required, ConsumerFn consume) override {
-      throw std::logic_error("Implement me!");
+      input->produce(required - IUSet({&iu}), [&]() {
+         provideIU(&iu, exp->compile());
+         consume();
+      });
    }
 
    IU* getIU(const string& attName) {
