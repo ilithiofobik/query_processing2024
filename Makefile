@@ -44,14 +44,16 @@ $(TARGET_MARKER):
 $(BINDIR)/%.out: $(TARGET_MARKER) $(SRCDIR)/%.cpp
 	$(CXX) $(patsubst $(BINDIR)/%.out, $(SRCDIR)/%.cpp, $@) $(CXXFLAGS) -o $@
 
-## special rules for query compiler
 
+## if quiet flag is set, don't ouptput generated code
+CODEGEN_COMMAND := $(if $(quiet),clang-format --style=WebKit >, clang-format --style=WebKit | tee)
+
+## special rules for query compiler
 $(BINDIR)/p2c-task-%.out: $(TARGET_MARKER) $(SRCDIR)/p2c-task-%.cpp $(RSRCDIR)/queryFrame.cpp $(SRCDIR)/additionaloperators.hpp
 	$(CXX) -std=c++20 $(patsubst $(BINDIR)/p2c-task-%.out, $(SRCDIR)/p2c-task-%.cpp, $@) $(CXXFLAGS) -O0 -g -o $(subst task,tmp,$@)
 	cp $(RSRCDIR)/queryFrame.cpp $(BINDIR)/queryFrame.cpp
-	$(subst task,tmp,$@) | clang-format --style=WebKit | tee $(BINDIR)/p2c-query.cpp
+	$(subst task,tmp,$@) | $(CODEGEN_COMMAND) $(BINDIR)/p2c-query.cpp
 	$(CXX) -std=c++20 $(BINDIR)/queryFrame.cpp $(CXXFLAGS) -DTASK_NAME=\"$(patsubst $(BINDIR)/p2c-task-%.out,%,$@)\" -o $@
-
 clean:
 	$(RM) -r $(BINDIR)/*
 
