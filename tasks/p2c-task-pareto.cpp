@@ -32,10 +32,10 @@ int main()
       IU* ld = l->getIU("l_discount");
 
       auto sel = make_unique<Selection>(
-         std::move(l), makeCallExp("std::less()", lo, 4729472));
+         std::move(l), makeCallExp("std::less()", lo, 100000));
 
       auto p = make_unique<Pareto>(std::move(sel), std::vector<IU*>({lq, ld}));      
-      produceAndPrint(std::move(p), {lo, lq, ld});
+      produceAndPrint(std::move(p), {lo, lq, ld}, 2, 5000, 10);
    }
    return 0;
 }
