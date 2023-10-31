@@ -26,7 +26,6 @@ int main()
       IU* lq = l->getIU("l_quantity");
       IU* lp = l->getIU("l_extendedprice");
       IU* lo = l->getIU("l_orderkey");
-      IU* lc = l->getIU("l_comment");
 
       auto sort = make_unique<Sort>(std::move(l), std::vector<IU*>({lq, lp, lo}));
       produceAndPrint(std::move(sort), {lq, lp, lo}, 2, 59986043, 10);
