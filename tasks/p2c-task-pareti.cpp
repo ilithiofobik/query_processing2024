@@ -38,7 +38,8 @@ int main()
          std::move(sel1), makeCallExp("([](auto& l, auto& r){ return l*r > 800000;})", make_unique<IUExp>(lq), make_unique<IUExp>(ld)));
 
       auto p = make_unique<Pareto>(std::move(sel2), std::vector<IU*>({lq, ld}));
-      produceAndPrint(std::move(p), {lo, lq, ld}, 2, 10398, 10);
+      auto sort = make_unique<Sort>(std::move(p), std::vector<IU*>({lo}));
+      produceAndPrint(std::move(sort), {lo, lq, ld}, 2, 10398, 10);
    }
    return 0;
 }

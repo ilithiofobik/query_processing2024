@@ -35,7 +35,9 @@ int main()
          std::move(l), makeCallExp("std::less()", lo, 100000));
 
       auto p = make_unique<Pareto>(std::move(sel), std::vector<IU*>({lq, ld}));      
-      produceAndPrint(std::move(p), {lo, lq, ld}, 2, 10915, 10);
+
+      auto sort = make_unique<Sort>(std::move(p), std::vector<IU*>({lo}));
+      produceAndPrint(std::move(sort), {lo, lq, ld}, 2, 10915, 10);
    }
    return 0;
 }
