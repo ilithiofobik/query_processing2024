@@ -42,7 +42,7 @@ struct Sort : public Operator {
       vector<IU*> requiredVec = requiredIUs.v;
       string requiredType = format("tuple<{}>", formatTypes(requiredVec));
 
-      // create a vector containing typles with all required values
+      // create a vector containing tuples with all required values
       print("\nvector<{}> {};\n", requiredType, v.varname);
 
       input->produce(requiredIUs, [&]() {
@@ -279,6 +279,10 @@ struct GroupBy : public Operator {
 struct Pareto : public Operator {
    unique_ptr<Operator> input;
    vector<IU*> compareKeyIUs;
+   IU ip{"isPareto", Type::Bool};
+   IU v{"vector", Type::Undefined};
+   IU p{"p", Type::Undefined};
+   IU q{"q", Type::Undefined};
 
    // constructor
    Pareto(unique_ptr<Operator> input, const vector<IU*>& compareKeyIUs) : input(std::move(input)), compareKeyIUs(compareKeyIUs)  {}
@@ -291,6 +295,64 @@ struct Pareto : public Operator {
    }
 
    void produce(const IUSet& required, ConsumerFn consume) override {
-      throw std::logic_error("Implement me!");
+      IUSet requiredIUs = (required & input->availableIUs()) | IUSet(compareKeyIUs);
+      vector<IU*> requiredVec = requiredIUs.v;
+      string requiredType = format("tuple<{}>", formatTypes(requiredVec));
+
+      // create a vector containing tuples with all required values
+      print("\nvector<{}> {};\n", requiredType, v.varname);
+
+      input->produce(requiredIUs, [&]() {
+         // push all required values to the vector
+         print("{}.push_back({{{}}});\n", v.varname, formatVarnames(requiredVec));
+      });
+
+      // provide the tuples as requiredIU to the consumer
+      genBlock(format("for (auto {}: {})", p.varname, v.varname), [&]{
+         provideIU(&ip, "true");
+
+         genBlock(format("for (auto {}: {})", q.varname, v.varname), [&]{
+            // for every keyIU add it to list of required conditions indices
+            vector<int> condIndices;
+            for (auto it =  compareKeyIUs.begin(); it != compareKeyIUs.end(); it++) {
+               condIndices.push_back(getReqIndex(requiredVec, *it));
+            }
+
+            // if there is a dominiating q then p is not Pareto
+            genBlock(format("if ({})", generateConditions(condIndices, p.varname, q.varname)), [&]{
+               print("{} = false;\n", ip.varname);
+               print("break;\n");
+            });
+         });
+
+         genBlock(format("if ({})", ip.varname), [&]{
+            for (long unsigned int i = 0; i < requiredVec.size(); i++) {
+               provideIU(requiredVec[i], format("get<{}>({})", i, p.varname));
+            }
+            consume();
+         });
+      });
    };
+
+   private:
+      string generateConditions(const vector<int>& indices, const string& p, const string& q) {
+         stringstream ss;
+         for (int i: indices) {
+            ss << format("get<{0}>({2}) < get<{0}>({1}) &&", i, p, q);
+         }
+
+         string result = ss.str();
+         if (result.size()) {
+            result.erase(result.length() - 3); // remove last " &&"
+         }
+
+         return result;
+      }
+
+      // translate a compareKeyIU to its index in requiredVec 
+      int getReqIndex(const vector<IU*>& requiredVec, IU* iu) {
+         auto itReq = find(requiredVec.begin(), requiredVec.end(), iu); 
+         assert(itReq != requiredVec.end());
+         return itReq - requiredVec.begin();
+      }
 };
