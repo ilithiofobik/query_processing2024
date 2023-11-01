@@ -25,6 +25,8 @@ struct Sort : public Operator {
    IU v{"vector", Type::Undefined};
    bool desc;
 
+   char cmpSign = desc ? '>' : '<';
+
    // constructor
    Sort(unique_ptr<Operator> input, const vector<IU*>& keyIUs, bool desc = false) : input(std::move(input)), keyIUs(keyIUs), desc(desc)  {}
 
@@ -35,8 +37,55 @@ struct Sort : public Operator {
       return input->availableIUs();
    }
 
+   string generateConditions(long unsigned int i, const vector<int>& v) {
+      if (i == v.size() - 1) {
+         return format("get<{0}>(a) {1} get<{0}>(b)", v[i], cmpSign);
+      } else {
+         string nextConds = generateConditions(i + 1, v);
+         return format("get<{0}>(a) {1} get<{0}>(b) || (get<{0}>(a) == get<{0}>(b) && ({2}))", v[i], cmpSign, nextConds);
+      }
+   }
+
    void produce(const IUSet& required, ConsumerFn consume) override {
-      throw std::logic_error("Implement me!");
+      IUSet requiredIUs = (required & input->availableIUs()) | IUSet(keyIUs); // all fields
+
+      string requiredType = format("tuple<{}>", formatTypes(requiredIUs.v));
+
+      print("\nvector<{}> {};\n", requiredType, v.varname);
+
+      input->produce(requiredIUs, [&]() {
+         print("{}.push_back({{{}}});\n", v.varname, formatVarnames(requiredIUs.v));
+      });
+
+      print("\n");
+
+      vector<int> indices; 
+      stringstream ss;
+
+      for (auto it =  keyIUs.begin(); it != keyIUs.end(); it++) {
+         auto itReq = find(requiredIUs.v.begin(), requiredIUs.v.end(), *it); 
+         assert(itReq != requiredIUs.v.end());
+         int index = itReq - requiredIUs.v.begin();
+         indices.push_back(index);
+      }
+
+      string conds = generateConditions(0, indices);
+
+      print("sort({0}.begin(), {0}.end(), [](const {1}& a, const {1}& b) {{ return {2}; }});\n", 
+         v.varname, 
+         requiredType, 
+         conds
+      );
+
+      print("\n");
+
+      genBlock(format("for (auto it: {})", v.varname), [&]{
+         for (long unsigned int i = 0; i < requiredIUs.v.size(); i++) {
+            IU* iu = (requiredIUs.v)[i];
+            provideIU(iu, format("get<{}>(it)", i));
+         }
+         consume();
+      });
    }
 };
 
