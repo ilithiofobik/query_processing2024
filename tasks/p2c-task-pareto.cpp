@@ -22,6 +22,18 @@ using namespace p2c;
 int main()
 {
    {
+      /*
+      with limitedli as (
+        select l_orderkey, l_quantity, l_discount
+        from lineitem o
+        where l_orderkey < 1000000
+      )
+      select l_orderkey, l_quantity, l_discount
+      from limitedli o
+      where not exists (select 1 from limitedli i where (i.l_quantity <= o.l_quantity and i.l_discount <= o.l_discount) and
+                        (i.l_quantity < o.l_quantity or i.l_discount < o.l_discount))
+      order by l_orderkey
+      */
       auto l = make_unique<Scan>("lineitem");
       IU* lo = l->getIU("l_orderkey");
       IU* lq = l->getIU("l_quantity");
