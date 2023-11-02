@@ -247,7 +247,6 @@ struct GroupBy : public Operator {
                }
                case (AggFunction::AvgSum): {
                   provideIU(&resultIU, format("get<{}>(it.second) / get<{}>(it.second)", i, i + 1));
-                  i++; // ignore AvgCnt
                   break;
                }
                case (AggFunction::AvgCnt): break;
