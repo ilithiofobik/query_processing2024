@@ -21,10 +21,6 @@ using namespace p2c;
 
 int main()
 {
-   // Pareto Operator
-   //select *
-   //from orders o
-   //where not exists (select 1 from orders i where i.x > o.x and i.y > o.y)
    {
       auto l = make_unique<Scan>("lineitem");
       IU* lo = l->getIU("l_orderkey");
@@ -32,12 +28,12 @@ int main()
       IU* ld = l->getIU("l_discount");
 
       auto sel = make_unique<Selection>(
-         std::move(l), makeCallExp("std::less()", lo, 100000));
+         std::move(l), makeCallExp("std::less()", lo, 1000000));
 
       auto p = make_unique<Pareto>(std::move(sel), std::vector<IU*>({lq, ld}));      
 
       auto sort = make_unique<Sort>(std::move(p), std::vector<IU*>({lo}));
-      produceAndPrint(std::move(sort), {lo, lq, ld}, 2, 10915, 10);
+      produceAndPrint(std::move(sort), {lo, lq, ld}, 2, 1781, 10); // limits the ouptut (don't use this for optimization)
    }
    return 0;
 }

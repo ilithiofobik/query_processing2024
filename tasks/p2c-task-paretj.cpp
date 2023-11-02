@@ -25,16 +25,17 @@ int main()
       auto l = make_unique<Scan>("lineitem");
       IU* lo = l->getIU("l_orderkey");
       IU* lq = l->getIU("l_quantity");
-      IU* lp = l->getIU("l_extendedprice");
-      IU* ld = l->getIU("l_discount");
+      IU* ld = l->getIU("l_extendedprice");
 
-      auto sel = make_unique<Selection>(
-         std::move(l), makeCallExp("([](auto& a1, auto& a2, auto& a3){ return a1*a2*a3 > 300000;})", 
-            make_unique<IUExp>(lq), make_unique<IUExp>(lp), make_unique<IUExp>(ld)));
+      auto sel1 = make_unique<Selection>(
+         std::move(l), makeCallExp("std::less()", lo, 10000000));
 
-      auto p = make_unique<Pareto>(std::move(sel), std::vector<IU*>({lq, lp, ld}));
+      auto sel2 = make_unique<Selection>(
+         std::move(sel1), makeCallExp("([](auto& l, auto& r){ return l*r > 400000;})", make_unique<IUExp>(lq), make_unique<IUExp>(ld)));
+
+      auto p = make_unique<Pareto>(std::move(sel2), std::vector<IU*>({lq, ld}));
       auto sort = make_unique<Sort>(std::move(p), std::vector<IU*>({lo}));
-      produceAndPrint(std::move(sort), {lo, lq, lp, ld}, 2, 95, 10); // limits the ouptut (don't use this for optimization)
+      produceAndPrint(std::move(sort), {lo, lq, ld}, 2, 36, 10); // limits the ouptut (don't use this for optimization)
    }
    return 0;
 }

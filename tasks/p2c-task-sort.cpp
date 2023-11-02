@@ -28,7 +28,7 @@ int main()
       IU* lo = l->getIU("l_orderkey");
 
       auto sort = make_unique<Sort>(std::move(l), std::vector<IU*>({lq, lp, lo}));
-      produceAndPrint(std::move(sort), {lq, lp, lo}, 2, 59986043, 10);
+      produceAndPrint(std::move(sort), {lq, lp, lo}, 2, 59986043, 10); // limits the ouptut (don't use this for optimization)
    }
    return 0;
 }
