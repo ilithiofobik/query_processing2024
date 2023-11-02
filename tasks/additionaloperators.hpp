@@ -336,17 +336,25 @@ struct Pareto : public Operator {
 
    private:
       string generateConditions(const vector<int>& indices, const string& p, const string& q) {
-         stringstream ss;
+         stringstream andSs; // dominated if point q is not worse in every dimension
+         stringstream orSs; // dominated if point q is strictly better in >=1 dimension
+
          for (int i: indices) {
-            ss << format("get<{0}>({2}) < get<{0}>({1}) &&", i, p, q);
+            andSs << format("get<{0}>({2}) <= get<{0}>({1}) &&", i, p, q);
+            orSs  << format("get<{0}>({2}) < get<{0}>({1}) ||",  i, p, q);
          }
 
-         string result = ss.str();
-         if (result.size()) {
-            result.erase(result.length() - 3); // remove last " &&"
+         string andStr = andSs.str();
+         if (andStr.size() > 3) {
+            andStr.erase(andStr.size() - 3); // remove last " &&"
          }
 
-         return result;
+         string orStr = orSs.str();
+         if (orStr.size() > 3) {
+            orStr.erase(orStr.size() - 3); // remove last " ||"
+         }
+
+         return format("({}) && ({})", andStr, orStr);
       }
 
       // translate a compareKeyIU to its index in requiredVec 
