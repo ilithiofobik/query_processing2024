@@ -278,7 +278,6 @@ struct GroupBy : public Operator {
 struct Pareto : public Operator {
    unique_ptr<Operator> input;
    vector<IU*> compareKeyIUs;
-   IU ip{"isPareto", Type::Bool};
    IU v{"vector", Type::Undefined};
    IU pm{"paretoMap", Type::Undefined};
    IU p{"p", Type::Undefined};
@@ -298,32 +297,24 @@ struct Pareto : public Operator {
       IUSet requiredIUs = (required & input->availableIUs()) | IUSet(compareKeyIUs);
       vector<IU*> requiredVec = requiredIUs.v;
       string requiredType = format("tuple<{}>", formatTypes(requiredVec));
-      string compareType = format("tuple<{}>", formatTypes(compareKeyIUs));
-      string requiredVars = formatVarnames(requiredVec);
       string compareVars = formatVarnames(compareKeyIUs);
 
       // create a vector containing tuples with all required values
-      print("\nvector<{}> {};\n", requiredType, v.varname);
-      // create a set containing tuples being Pareto points
-      // at the beginning set it to all points, then remove non-Pareto
-      print("unordered_map<{0}, bool> {1};\n", compareType, pm.varname);
+      print("vector<{}> {};\n", requiredType, v.varname);
+      // create a map from tuple to boolean value saying if it is Pareto
+      print("unordered_map<{0}, bool> {1};\n", format("tuple<{}>", formatTypes(compareKeyIUs)), pm.varname);
 
       input->produce(requiredIUs, [&]() {
          // push all required values to the vector
-         print("{}.push_back({{{}}});\n", v.varname, requiredVars);
+         print("{}.push_back({{{}}});\n", v.varname, formatVarnames(requiredVec));
+         // set all points to true in Pareto Map
          print("{}[{{{}}}] = true;\n", pm.varname, compareVars);
       });
 
       genBlock(format("for (auto {0} = {1}.begin(); {0} != {1}.end(); {0}++)", p.varname, pm.varname), [&] {
          genBlock(format("for (auto {0} = {1}.begin(); {0} != {1}.end(); {0}++)", q.varname, pm.varname), [&]{
-            // for every keyIU add it to list of required conditions indices
-            vector<int> condIndices;
-            for (auto it =  compareKeyIUs.begin(); it != compareKeyIUs.end(); it++) {
-               condIndices.push_back(getVecIndex(compareKeyIUs, *it));
-            }
-
             // if there is a dominiating q then p is not Pareto
-            genBlock(format("if ({})", generateConditions(condIndices, p.varname, q.varname)), [&]{
+            genBlock(format("if ({})", generateConditions(compareKeyIUs.size(), p.varname, q.varname)), [&]{
                print("{}->second = false;\n", p.varname);
                print("break;\n");
             });
@@ -343,11 +334,11 @@ struct Pareto : public Operator {
    };
 
    private:
-      string generateConditions(const vector<int>& indices, const string& p, const string& q) {
+      string generateConditions(int n, const string& p, const string& q) {
          stringstream andSs; // dominated if point q is not worse in every dimension
          stringstream orSs; // dominated if point q is strictly better in >=1 dimension
 
-         for (int i: indices) {
+         for (int i = 0; i < n; i++) {
             andSs << format("get<{0}>({2}->first) <= get<{0}>({1}->first) &&", i, p, q);
             orSs  << format("get<{0}>({2}->first) < get<{0}>({1}->first) ||",  i, p, q);
          }
@@ -363,12 +354,5 @@ struct Pareto : public Operator {
          }
 
          return format("({}) && ({})", andStr, orStr);
-      }
-
-      // translate a iu to its index in given vector 
-      int getVecIndex(const vector<IU*>& v, IU* iu) {
-         auto itReq = find(v.begin(), v.end(), iu); 
-         assert(itReq != v.end());
-         return itReq - v.begin();
       }
 };
