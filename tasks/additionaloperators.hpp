@@ -280,6 +280,7 @@ struct Pareto : public Operator {
    vector<IU*> compareKeyIUs;
    IU ip{"isPareto", Type::Bool};
    IU v{"vector", Type::Undefined};
+   IU pm{"paretoMap", Type::Undefined};
    IU p{"p", Type::Undefined};
    IU q{"q", Type::Undefined};
 
@@ -297,37 +298,45 @@ struct Pareto : public Operator {
       IUSet requiredIUs = (required & input->availableIUs()) | IUSet(compareKeyIUs);
       vector<IU*> requiredVec = requiredIUs.v;
       string requiredType = format("tuple<{}>", formatTypes(requiredVec));
+      string compareType = format("tuple<{}>", formatTypes(compareKeyIUs));
+      string requiredVars = formatVarnames(requiredVec);
+      string compareVars = formatVarnames(compareKeyIUs);
 
       // create a vector containing tuples with all required values
       print("\nvector<{}> {};\n", requiredType, v.varname);
+      // create a set containing tuples being Pareto points
+      // at the beginning set it to all points, then remove non-Pareto
+      print("unordered_map<{0}, bool> {1};\n", compareType, pm.varname);
 
       input->produce(requiredIUs, [&]() {
          // push all required values to the vector
-         print("{}.push_back({{{}}});\n", v.varname, formatVarnames(requiredVec));
+         print("{}.push_back({{{}}});\n", v.varname, requiredVars);
+         print("{}[{{{}}}] = true;\n", pm.varname, compareVars);
       });
 
-      // provide the tuples as requiredIU to the consumer
-      genBlock(format("for (auto {}: {})", p.varname, v.varname), [&]{
-         provideIU(&ip, "true");
-
-         genBlock(format("for (auto {}: {})", q.varname, v.varname), [&]{
+      genBlock(format("for (auto {0} = {1}.begin(); {0} != {1}.end(); {0}++)", p.varname, pm.varname), [&] {
+         genBlock(format("for (auto {0} = {1}.begin(); {0} != {1}.end(); {0}++)", q.varname, pm.varname), [&]{
             // for every keyIU add it to list of required conditions indices
             vector<int> condIndices;
             for (auto it =  compareKeyIUs.begin(); it != compareKeyIUs.end(); it++) {
-               condIndices.push_back(getReqIndex(requiredVec, *it));
+               condIndices.push_back(getVecIndex(compareKeyIUs, *it));
             }
 
             // if there is a dominiating q then p is not Pareto
             genBlock(format("if ({})", generateConditions(condIndices, p.varname, q.varname)), [&]{
-               print("{} = false;\n", ip.varname);
+               print("{}->second = false;\n", p.varname);
                print("break;\n");
             });
          });
+      });
 
-         genBlock(format("if ({})", ip.varname), [&]{
-            for (long unsigned int i = 0; i < requiredVec.size(); i++) {
-               provideIU(requiredVec[i], format("get<{}>({})", i, p.varname));
-            }
+      // provide the tuples as requiredIU to the consumer
+      genBlock(format("for (auto {}: {})", p.varname, v.varname), [&]{
+         for (long unsigned int i = 0; i < requiredVec.size(); i++) {
+            provideIU(requiredVec[i], format("get<{}>({})", i, p.varname));
+         }
+
+         genBlock(format("if ({}[{{{}}}])", pm.varname, compareVars), [&]{
             consume();
          });
       });
@@ -339,8 +348,8 @@ struct Pareto : public Operator {
          stringstream orSs; // dominated if point q is strictly better in >=1 dimension
 
          for (int i: indices) {
-            andSs << format("get<{0}>({2}) <= get<{0}>({1}) &&", i, p, q);
-            orSs  << format("get<{0}>({2}) < get<{0}>({1}) ||",  i, p, q);
+            andSs << format("get<{0}>({2}->first) <= get<{0}>({1}->first) &&", i, p, q);
+            orSs  << format("get<{0}>({2}->first) < get<{0}>({1}->first) ||",  i, p, q);
          }
 
          string andStr = andSs.str();
@@ -356,10 +365,10 @@ struct Pareto : public Operator {
          return format("({}) && ({})", andStr, orStr);
       }
 
-      // translate a compareKeyIU to its index in requiredVec 
-      int getReqIndex(const vector<IU*>& requiredVec, IU* iu) {
-         auto itReq = find(requiredVec.begin(), requiredVec.end(), iu); 
-         assert(itReq != requiredVec.end());
-         return itReq - requiredVec.begin();
+      // translate a iu to its index in given vector 
+      int getVecIndex(const vector<IU*>& v, IU* iu) {
+         auto itReq = find(v.begin(), v.end(), iu); 
+         assert(itReq != v.end());
+         return itReq - v.begin();
       }
 };
