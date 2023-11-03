@@ -57,7 +57,8 @@ std::pair<int64_t, double> manual_join(unsigned threads, const TPCH& db) {
         for (uint64_t l = r.begin(); l < r.end(); l++) {    
             int64_t l_orderkey = db.lineitem.l_orderkey[l];
             // there must be given order in the hashmap
-            assert(o_totalprice_map.find(accessor, l_orderkey));
+            bool accFound = o_totalprice_map.find(accessor, l_orderkey);
+            assert(accFound);
             // accessing the value in hashmap
             double o_totalprice = accessor->second;
             // if price > 1000.0 count and add totalprice-discount to the sum
