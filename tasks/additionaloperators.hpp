@@ -314,7 +314,10 @@ struct Pareto : public Operator {
       genBlock(format("for (auto {0} = {1}.begin(); {0} != {1}.end(); {0}++)", p.varname, pm.varname), [&] {
          genBlock(format("for (auto {0} = {1}.begin(); {0} != {1}.end(); {0}++)", q.varname, pm.varname), [&]{
             // if there is a dominiating q then p is not Pareto
-            genBlock(format("if ({})", generateConditions(compareKeyIUs.size(), p.varname, q.varname)), [&]{
+            string conds = generateConditions(compareKeyIUs.size(), p.varname, q.varname);
+            // check if points are different
+            // if so just check the <= conditions (there will be at least one dimension with <)
+            genBlock(format("if ({} != {} && {})", p.varname, q.varname, conds), [&]{
                print("{}->second = false;\n", p.varname);
                print("break;\n");
             });
@@ -336,11 +339,9 @@ struct Pareto : public Operator {
    private:
       string generateConditions(int n, const string& p, const string& q) {
          stringstream andSs; // dominated if point q is not worse in every dimension
-         stringstream orSs; // dominated if point q is strictly better in >=1 dimension
 
          for (int i = 0; i < n; i++) {
             andSs << format("get<{0}>({2}->first) <= get<{0}>({1}->first) &&", i, p, q);
-            orSs  << format("get<{0}>({2}->first) < get<{0}>({1}->first) ||",  i, p, q);
          }
 
          string andStr = andSs.str();
@@ -348,11 +349,6 @@ struct Pareto : public Operator {
             andStr.erase(andStr.size() - 3); // remove last " &&"
          }
 
-         string orStr = orSs.str();
-         if (orStr.size() > 3) {
-            orStr.erase(orStr.size() - 3); // remove last " ||"
-         }
-
-         return format("({}) && ({})", andStr, orStr);
+         return andStr;
       }
 };
