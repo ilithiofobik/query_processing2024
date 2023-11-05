@@ -313,11 +313,14 @@ struct Pareto : public Operator {
 
       genBlock(format("for (auto {0} = {1}.begin(); {0} != {1}.end(); {0}++)", p.varname, pm.varname), [&] {
          genBlock(format("for (auto {0} = {1}.begin(); {0} != {1}.end(); {0}++)", q.varname, pm.varname), [&]{
-            // if there is a dominiating q then p is not Pareto
-            string conds = generateConditions(compareKeyIUs.size(), p.varname, q.varname);
-            // check if points are different
-            // if so just check the <= conditions (there will be at least one dimension with <)
-            genBlock(format("if ({} != {} && {})", p.varname, q.varname, conds), [&]{
+            // check if p != q (checking <= for all dimensions is not sufficient)
+            string pNeqQ = format("{} != {}", p.varname, q.varname);
+            // check if q can still be Pareto
+            string qIsPareto = format("{}->second", q.varname);
+            // check the <= conditions
+            string leq = generateConditions(compareKeyIUs.size(), p.varname, q.varname);
+
+            genBlock(format("if ({} && {} && {})", pNeqQ, qIsPareto, leq), [&]{
                print("{}->second = false;\n", p.varname);
                print("break;\n");
             });
