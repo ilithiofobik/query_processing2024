@@ -323,11 +323,15 @@ struct Pareto : public Operator {
                print("{}", paretoStatement);
             });
          });
+         
          // check all points after p in the hashmap 
          // there is no need to check if p != q
-         genBlock(format("for (auto {0} = next({1}, 1); {0} != {2}.end(); {0}++)", q.varname, p.varname, pm.varname), [&]{
-            genBlock(format("if ({})", leq), [&]{
-               print("{}", paretoStatement);
+         // if previous for loop broke, do nothing
+         genBlock(format("if ({}->second)", p.varname), [&]{
+            genBlock(format("for (auto {0} = next({1}, 1); {0} != {2}.end(); {0}++)", q.varname, p.varname, pm.varname), [&]{
+               genBlock(format("if ({})", leq), [&]{
+                  print("{}", paretoStatement);
+               });
             });
          });
       });
