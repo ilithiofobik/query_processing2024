@@ -294,10 +294,10 @@ struct Pareto : public Operator {
    }
 
    void produce(const IUSet& required, ConsumerFn consume) override {
-      IUSet requiredIUs = (required & input->availableIUs()) | IUSet(compareKeyIUs);
-      vector<IU*> requiredVec = requiredIUs.v;
-      string requiredType = format("tuple<{}>", formatTypes(requiredVec));
-      string compareVars = formatVarnames(compareKeyIUs);
+      const IUSet requiredIUs = (required & input->availableIUs()) | IUSet(compareKeyIUs);
+      const vector<IU*> requiredVec = requiredIUs.v;
+      const string requiredType = format("tuple<{}>", formatTypes(requiredVec));
+      const string compareVars = formatVarnames(compareKeyIUs);
 
       // create a vector containing tuples with all required values
       print("vector<{}> {};\n", requiredType, v.varname);
@@ -311,18 +311,23 @@ struct Pareto : public Operator {
          print("{}[{{{}}}] = true;\n", pm.varname, compareVars);
       });
 
-      genBlock(format("for (auto {0} = {1}.begin(); {0} != {1}.end(); {0}++)", p.varname, pm.varname), [&] {
-         genBlock(format("for (auto {0} = {1}.begin(); {0} != {1}.end(); {0}++)", q.varname, pm.varname), [&]{
-            // check if p != q (checking <= for all dimensions is not sufficient)
-            string pNeqQ = format("{} != {}", p.varname, q.varname);
-            // check if q can still be Pareto
-            string qIsPareto = format("{}->second", q.varname);
-            // check the <= conditions
-            string leq = generateConditions(compareKeyIUs.size(), p.varname, q.varname);
+      // check the <= conditions
+      const string leq = generateConditions(compareKeyIUs.size(), p.varname, q.varname);
+      // assign p to false and break if found dominating q
+      const string paretoStatement = format("{}->second = false;\nbreak;\n", p.varname);
 
-            genBlock(format("if ({} && {} && {})", pNeqQ, qIsPareto, leq), [&]{
-               print("{}->second = false;\n", p.varname);
-               print("break;\n");
+      genBlock(format("for (auto {0} = {1}.begin(); {0} != {1}.end(); {0}++)", p.varname, pm.varname), [&] {
+         // check all points before p in the hashmap
+         genBlock(format("for (auto {0} = {2}.begin(); {0} != {1}; {0}++)", q.varname, p.varname, pm.varname), [&]{
+            genBlock(format("if ({})", leq), [&]{
+               print("{}", paretoStatement);
+            });
+         });
+         // check all points after p in the hashmap 
+         // there is no need to check if p != q
+         genBlock(format("for (auto {0} = next({1}, 1); {0} != {2}.end(); {0}++)", q.varname, p.varname, pm.varname), [&]{
+            genBlock(format("if ({})", leq), [&]{
+               print("{}", paretoStatement);
             });
          });
       });
