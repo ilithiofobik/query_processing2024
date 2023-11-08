@@ -45,4 +45,8 @@ Performance build:
 make target=release bin/manualjoin.out
 ```
 
+Compiling with variant flag as flag like VARIANT_tagged: (the flag is added to both the compiler and to the compiled query)
+``` sh
+make target=release variant=tagged bin/manualjoin.out
+```
 Also try `target=sanitize` to use the address sanitizer.
