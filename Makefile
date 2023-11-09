@@ -41,6 +41,13 @@ $(TARGET_MARKER):
 	$(RM) $(BINDIR)/.*.target
 	touch $(TARGET_MARKER)
 
+## rebuild w/o file changes if variant changed
+VARIANT_MARKER      := $(BINDIR)/.$(variant).variant
+$(VARIANT_MARKER):
+	mkdir -p $(BINDIR)
+	$(RM) $(BINDIR)/.*.variant
+	touch $(VARIANT_MARKER)
+
 ## build targets
 $(BINDIR)/%.out: $(TARGET_MARKER) $(SRCDIR)/%.cpp
 	$(CXX) $(patsubst $(BINDIR)/%.out, $(SRCDIR)/%.cpp, $@) $(CXXFLAGS) -o $@
