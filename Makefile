@@ -41,6 +41,13 @@ $(TARGET_MARKER):
 	$(RM) $(BINDIR)/.*.target
 	touch $(TARGET_MARKER)
 
+## rebuild w/o file changes if variant changed
+VARIANT_MARKER      := $(BINDIR)/.$(variant).variant
+$(VARIANT_MARKER):
+	mkdir -p $(BINDIR)
+	$(RM) $(BINDIR)/.*.variant
+	touch $(VARIANT_MARKER)
+
 ## build targets
 $(BINDIR)/%.out: $(TARGET_MARKER) $(SRCDIR)/%.cpp
 	$(CXX) $(patsubst $(BINDIR)/%.out, $(SRCDIR)/%.cpp, $@) $(CXXFLAGS) -o $@
@@ -51,10 +58,10 @@ CODEGEN_COMMAND := $(if $(quiet),clang-format --style=WebKit >, clang-format --s
 
 get_task = $(basename $(word 3,$(subst -, ,$1)))
 
-VARIANT_FLAG = -DVARIANT_$(variant)
+VARIANT_FLAG = -DVARIANT_$(variant) -DVARIANT_NAME=$(variant)
 
 ## special rules for query compiler
-$(BINDIR)/p2c-task-%.out: $(TARGET_MARKER) $(SRCDIR)/p2c-task-%.cpp $(RSRCDIR)/queryFrame.cpp $(SRCDIR)/additionaloperators.hpp
+$(BINDIR)/p2c-task-%.out: $(TARGET_MARKER) $(VARIANT_MARKER) $(SRCDIR)/p2c-task-%.cpp $(RSRCDIR)/queryFrame.cpp $(SRCDIR)/additionaloperators.hpp
 	$(CXX) -std=c++20 $(patsubst $(BINDIR)/p2c-task-%.out, $(SRCDIR)/p2c-task-%.cpp, $@) $(CXXFLAGS) $(VARIANT_FLAG) -O0 -g -o $(subst task,tmp,$@)
 	cp $(RSRCDIR)/queryFrame.cpp $(BINDIR)/queryFrame.cpp
 	$(subst task,tmp,$@) | $(CODEGEN_COMMAND) $(BINDIR)/p2c-query.cpp
