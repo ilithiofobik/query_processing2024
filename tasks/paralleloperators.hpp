@@ -19,7 +19,7 @@ struct ParallelOperator {
    virtual IUSet availableIUs() = 0;
    
    // Change this maybe?
-   virtual void produce(const IUSet& required, ConsumerFn consume) = 0;
+   virtual void produce(const IUSet& required, MorselInitFn morsel, ConsumerFn consume) = 0;
 
    virtual ~ParallelOperator() {}
 };
@@ -30,6 +30,7 @@ void produceAndSynchronizedPrint(unique_ptr<ParallelOperator> root, const std::v
    IU lock{"lock_guard", Type::Undefined};
    print("mutex {};\n", mutex.varname);
    root->produce(IUSet(ius),
+      [&]() {},
       [&]() {
          print("lock_guard<mutex> {}({});", lock.varname, mutex.varname);
          for (IU *iu : ius)
@@ -66,7 +67,7 @@ struct ParallelScan : public ParallelOperator {
       return result;
    }
 
-   void produce(const IUSet& required, ConsumerFn consume) override {
+   void produce(const IUSet& required, MorselInitFn morsel, ConsumerFn consume) override {
       genBlock(format("for (uint64_t i = 0; i != db.{}.tupleCount; i++)", relName), [&]() {
          for (IU* iu : required)
             provideIU(iu, format("db.{}.{}[i]", relName, iu->name));
@@ -97,12 +98,15 @@ struct ParallelSelection : public ParallelOperator {
       return input->availableIUs();
    }
 
-   void produce(const IUSet& required, ConsumerFn consume) override {
-      input->produce(required | pred->iusUsed(), [&]() {
-         genBlock(format("if ({})", pred->compile()), [&]() {
-            consume();
-         });
-      });
+   void produce(const IUSet& required, MorselInitFn morsel, ConsumerFn consume) override {
+      input->produce(required | pred->iusUsed(), 
+         [&]() {},
+         [&]() {
+            genBlock(format("if ({})", pred->compile()), [&]() {
+               consume();
+            });
+         }
+      );
    }
 };
 
@@ -124,7 +128,7 @@ struct ParallelHashJoin : public ParallelOperator {
       return left->availableIUs() | right->availableIUs();
    }
 
-   void produce(const IUSet& required, ConsumerFn consume) override {
+   void produce(const IUSet& required, MorselInitFn morsel, ConsumerFn consume) override {
       // figure out where required IUs come from
       IUSet leftRequiredIUs = (required & left->availableIUs()) | IUSet(leftKeyIUs);
       IUSet rightRequiredIUs = (required & right->availableIUs()) | IUSet(rightKeyIUs);
@@ -132,30 +136,36 @@ struct ParallelHashJoin : public ParallelOperator {
 
       // build hash table
       print("unordered_multimap<tuple<{}>, tuple<{}>> {};\n", formatTypes(leftKeyIUs), formatTypes(leftPayloadIUs.v), ht.varname);
-      left->produce(leftRequiredIUs, [&]() {
-         // insert tuple into hash table
-         print("{}.insert({{{{{}}}, {{{}}}}});\n", ht.varname, formatVarnames(leftKeyIUs), formatVarnames(leftPayloadIUs.v));
-      });
+      left->produce(leftRequiredIUs, 
+         [&]() {},
+         [&]() {
+            // insert tuple into hash table
+            print("{}.insert({{{{{}}}, {{{}}}}});\n", ht.varname, formatVarnames(leftKeyIUs), formatVarnames(leftPayloadIUs.v));
+         }
+      );
 
       // probe hash table
-      right->produce(rightRequiredIUs, [&]() {
-         // iterate over matches
-         genBlock(format("for (auto range = {}.equal_range({{{}}}); range.first!=range.second; range.first++)", ht.varname, formatVarnames(rightKeyIUs)),
-                  [&]() {
-                     // unpack payload
-                     unsigned countP = 0;
-                     for (IU* iu : leftPayloadIUs)
-                        provideIU(iu, format("get<{}>(range.first->second)", countP++));
-                     // unpack keys if needed
-                     for (unsigned i=0; i<leftKeyIUs.size(); i++) {
-                        IU* iu = leftKeyIUs[i];
-                        if (required.contains(iu))
-                           provideIU(iu, format("get<{}>(range.first->first)", i));
-                     }
-                     // consume
-                     consume();
-                  });
-      });
+      right->produce(rightRequiredIUs, 
+         [&]() {},
+         [&]() {
+            // iterate over matches
+            genBlock(format("for (auto range = {}.equal_range({{{}}}); range.first!=range.second; range.first++)", ht.varname, formatVarnames(rightKeyIUs)),
+                     [&]() {
+                        // unpack payload
+                        unsigned countP = 0;
+                        for (IU* iu : leftPayloadIUs)
+                           provideIU(iu, format("get<{}>(range.first->second)", countP++));
+                        // unpack keys if needed
+                        for (unsigned i=0; i<leftKeyIUs.size(); i++) {
+                           IU* iu = leftKeyIUs[i];
+                           if (required.contains(iu))
+                              provideIU(iu, format("get<{}>(range.first->first)", i));
+                        }
+                        // consume
+                        consume();
+                     });
+         }
+      );
    }
 };
 

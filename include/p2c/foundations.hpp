@@ -216,6 +216,8 @@ void genBlock(const string& str, Fn fn, const std::source_location& location = s
 
 // consumer callback function
 typedef std::function<void(void)> ConsumerFn;
+// morsel init function  
+typedef std::function<void(void)> MorselInitFn;
 
 // abstract base class of all operators
 struct Operator {
