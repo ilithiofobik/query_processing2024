@@ -1,27 +1,25 @@
 #pragma once
-#include "qp/common/util.hpp"
 #include <cstdint>
+#include <vector>
+
+#include "qp/common/util.hpp"
 
 using namespace qp;
 
-template<typename Data>
+template <typename Data>
 struct LocalBuffer {
-   LocalBuffer() {}
+    std::vector<Data> v;
 
-   ~LocalBuffer() {
-   }
+    LocalBuffer() { v.reserve(10000); }
 
-   void push_back(Data data) {
-   }
+    ~LocalBuffer() {}
 
-   struct iterator {
-   };
+    void push_back(Data data) { v.push_back(data); }
 
-   inline iterator begin() const { return iterator{0}; }
-   inline const iterator end() const { return iterator{0}; }
+    // struct iterator {};
 
-   uint64_t size() { return 0; }
+    inline auto begin() const { return v.begin(); }
+    inline const auto end() const { return v.end(); }
+
+    uint64_t size() { return v.size(); }
 };
-
-
-
