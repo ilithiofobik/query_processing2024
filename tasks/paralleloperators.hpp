@@ -9,6 +9,7 @@
 #include <p2c/tpch.hpp>
 #include <p2c/types.hpp>
 #include <string>
+#include <unordered_set>
 
 #include "local_buffer.hpp"
 
@@ -79,11 +80,16 @@ struct ParallelScan : public ParallelOperator {
 
         genBlock(parallelFor, [&]() {
             morsel();
+            std::unordered_set<std::string> used;
             genBlock(format("for (uint64_t i = r.begin(); i < r.end(); i++)"),
                      [&]() {
-                         for (IU* iu : required)
-                             provideIU(
-                                 iu, format("db.{}.{}[i]", relName, iu->name));
+                         for (IU* iu : required) {
+                             if (!used.contains(iu->varname)) {
+                                 provideIU(iu, format("db.{}.{}[i]", relName,
+                                                      iu->name));
+                                 used.insert(iu->varname);
+                             }
+                         }
                          consume();
                      });
         });
@@ -235,13 +241,17 @@ struct ParallelHashJoin : public ParallelOperator {
                                     iu, format("get<{}>(p.first.entry->value)",
                                                countP++));
                             // unpack keys if needed
+                            std::unordered_set<string> used;
                             for (unsigned i = 0; i < leftKeyIUs.size(); i++) {
                                 IU* iu = leftKeyIUs[i];
-                                if (required.contains(iu))
+                                if (required.contains(iu) &&
+                                    !used.contains(iu->varname)) {
                                     provideIU(
                                         iu,
                                         format("get<{}>(p.first.entry->key)",
                                                i));
+                                    used.insert(iu->varname);
+                                }
                             }
                             // consume
                             consume();
