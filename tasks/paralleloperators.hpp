@@ -116,12 +116,9 @@ struct ParallelSelection : public ParallelOperator {
 
     void produce(const IUSet& required, MorselInitFn morsel,
                  ConsumerFn consume) override {
-        input->produce(
-            required | pred->iusUsed(), [&]() {},
-            [&]() {
-                genBlock(format("if ({})", pred->compile()),
-                         [&]() { consume(); });
-            });
+        input->produce(required | pred->iusUsed(), morsel, [&]() {
+            genBlock(format("if ({})", pred->compile()), [&]() { consume(); });
+        });
     }
 };
 
@@ -131,6 +128,10 @@ struct ParallelHashJoin : public ParallelOperator {
     unique_ptr<ParallelOperator> right;
     vector<IU*> leftKeyIUs, rightKeyIUs;
     IU ht{"joinHT", Type::Undefined};
+    IU st{"storage", Type::Undefined};
+    IU st_loc{"storage_local", Type::Undefined};
+    IU c{"counter", Type::Undefined};
+    IU c_loc{"counter_local", Type::Undefined};
 
     // constructor
     ParallelHashJoin(unique_ptr<ParallelOperator> left,
@@ -165,9 +166,27 @@ struct ParallelHashJoin : public ParallelOperator {
         print("unordered_multimap<tuple<{}>, tuple<{}>> {};\n",
               formatTypes(leftKeyIUs), formatTypes(leftPayloadIUs.v),
               ht.varname);
+        // build local storage
+        string entryType =
+            format("Entry<tuple<{}>, tuple<{}>>", formatTypes(leftKeyIUs),
+                   formatTypes(leftPayloadIUs.v));
+        string vecType = format("std::vector<{}>", entryType);
+
+        print("tbb::enumerable_thread_specific<{}> {};\n", vecType, st.varname);
+        print("tbb::enumerable_thread_specific<int64_t> {};\n", c.varname);
+
         left->produce(
-            leftRequiredIUs, [&]() {},
+            leftRequiredIUs,
             [&]() {
+                print("{}& {} = {}.local();\n", vecType, st_loc.varname,
+                      st.varname);
+                print("int64_t& {} = {}.local();\n", c_loc.varname, c.varname);
+            },
+            [&]() {
+                print("{}.push_back({}({{{}}}, {{{}}}));\n", st_loc.varname,
+                      entryType, formatVarnames(leftKeyIUs),
+                      formatVarnames(leftPayloadIUs.v));
+                print("{}++;\n", c_loc.varname);
                 // insert tuple into hash table
                 print("{}.insert({{{{{}}}, {{{}}}}});\n", ht.varname,
                       formatVarnames(leftKeyIUs),

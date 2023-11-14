@@ -52,7 +52,8 @@ struct Hashtable {
     };
 
     std::pair<equal_range_iterator, equal_range_iterator> equal_range(K key) {
-        uint64_t slot = hashKey(key) & mask;
+        uint64_t hash = hashKey(key);
+        uint64_t slot = hash & mask;
         Entry<K, V> *beginIter = NULL;
         Entry<K, V> *endIter = NULL;
 
@@ -61,17 +62,11 @@ struct Hashtable {
         if (firstAddress & addTag(hash)) {
             Entry<K, V> *it = removeTag(firstAddress);
 
-            while (it) {
+            while (it != NULL) {
                 if (it->key == key) {
-                    beginIter = it;
-                    endIter = it->next;
-                    break;
-                }
-                it = it->next;
-            }
-
-            while (it) {
-                if (it->key == key) {
+                    if (beginIter == NULL) {
+                        beginIter = it;
+                    }
                     endIter = it->next;
                 }
                 it = it->next;
@@ -94,11 +89,6 @@ struct Hashtable {
         equal_range_iterator begin = {key, beginIter};
         equal_range_iterator end = {key, endIter};
         return std::make_pair(begin, end);
-    }
-
-    Entry<K, V> *keyToBucket(K key) {
-        uint64_t slot = hashKey(key) & mask;
-        return ht[slot].load();
     }
 
     void insert(Entry<K, V> *newEntry) {
