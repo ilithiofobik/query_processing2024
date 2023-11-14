@@ -13,6 +13,12 @@ struct Entry {
     K key;
     V value;
     Entry *next;
+
+    Entry(K k, V v) {
+        key = k;
+        value = v;
+        next = NULL;
+    }
 };
 
 typedef uint64_t TaggedPointer;
@@ -32,6 +38,10 @@ struct Hashtable {
         mask = htSize - 1;
         ht = reinterpret_cast<std::atomic<Entry<K, V> *> *>(
             qp::mem::alloc(sizeof(uint64_t) * htSize));
+
+        for (uint64_t slot = 0; slot < size; slot++) {
+            ht[slot].store(NULL);
+        }
     }
 
     ~Hashtable() { qp::mem::dealloc(ht, htSize); }
@@ -42,13 +52,12 @@ struct Hashtable {
     };
 
     std::pair<equal_range_iterator, equal_range_iterator> equal_range(K key) {
-        uint64_t hash = hashKey(key);
-        uint64_t slot = hash & mask;
-        uint64_t firstAddress = (uint64_t)ht[slot].load();
-        Entry<K, V> *beginIter = nullptr;
-        Entry<K, V> *endIter = nullptr;
+        uint64_t slot = hashKey(key) & mask;
+        Entry<K, V> *beginIter = NULL;
+        Entry<K, V> *endIter = NULL;
 
 #ifdef VARIANT_tagged
+        uint64_t firstAddress = (uint64_t)ht[slot].load();
         if (firstAddress & addTag(hash)) {
             Entry<K, V> *it = removeTag(firstAddress);
 
@@ -69,19 +78,13 @@ struct Hashtable {
             }
         }
 #else
-        Entry<K, V> *it = (Entry<K, V> *)firstAddress;
+        Entry<K, V> *it = ht[slot].load();
 
-        while (it) {
+        while (it != NULL) {
             if (it->key == key) {
-                beginIter = it;
-                endIter = it->next;
-                break;
-            }
-            it = it->next;
-        }
-
-        while (it) {
-            if (it->key == key) {
+                if (beginIter == NULL) {
+                    beginIter = it;
+                }
                 endIter = it->next;
             }
             it = it->next;
@@ -91,6 +94,11 @@ struct Hashtable {
         equal_range_iterator begin = {key, beginIter};
         equal_range_iterator end = {key, endIter};
         return std::make_pair(begin, end);
+    }
+
+    Entry<K, V> *keyToBucket(K key) {
+        uint64_t slot = hashKey(key) & mask;
+        return ht[slot].load();
     }
 
     void insert(Entry<K, V> *newEntry) {
@@ -137,13 +145,12 @@ struct Hashtable {
     }
 
     inline Entry<K, V> *removeTag(uint64_t entryPtr) {
-        auto untagged = entryPtr & untagMask;
-        return untagged;
+        uint64_t untagged = entryPtr & untagMask;
+        return (Entry<K, V> *)untagged;
     }
 
     inline uint64_t addTag(uint64_t hash) {
-        uint64_t tagPow = hash >> 60;  // first 4 bits, values 0 - 15
-        return 1ull << (48 +
-                        tagPow);  // returns 1-bit in first 16 bits, rest is 0
+        uint64_t tagPow = 48 + (hash >> 60);  // first 4 bits, values 0 - 15
+        return 1ull << tagPow;  // returns 1-bit in first 16 bits, rest is 0
     }
 };
