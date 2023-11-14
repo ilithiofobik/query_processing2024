@@ -127,13 +127,12 @@ struct ParallelHashJoin : public ParallelOperator {
     unique_ptr<ParallelOperator> left;
     unique_ptr<ParallelOperator> right;
     vector<IU*> leftKeyIUs, rightKeyIUs;
-    IU ht{"joinHT", Type::Undefined};
     IU st{"storage", Type::Undefined};
     IU st_loc{"storage_local", Type::Undefined};
     IU c{"counter", Type::Undefined};
     IU c_loc{"counter_local", Type::Undefined};
     IU ts{"total_size", Type::BigInt};
-    IU ht2{"ht", Type::Undefined};
+    IU ht{"ht", Type::Undefined};
     IU r{"r", Type::Undefined};
     IU v{"v", Type::Undefined};
 
@@ -166,10 +165,6 @@ struct ParallelHashJoin : public ParallelOperator {
             IUSet(
                 leftKeyIUs);  // these we need to store in hash table as payload
 
-        // build hash table
-        print("unordered_multimap<tuple<{}>, tuple<{}>> {};\n",
-              formatTypes(leftKeyIUs), formatTypes(leftPayloadIUs.v),
-              ht.varname);
         // build local storage
         string tuplesTypes =
             format("tuple<{}>, tuple<{}>", formatTypes(leftKeyIUs),
@@ -193,15 +188,11 @@ struct ParallelHashJoin : public ParallelOperator {
                       entryType, formatVarnames(leftKeyIUs),
                       formatVarnames(leftPayloadIUs.v));
                 print("{}++;\n", c_loc.varname);
-                // insert tuple into hash table
-                print("{}.insert({{{{{}}}, {{{}}}}});\n", ht.varname,
-                      formatVarnames(leftKeyIUs),
-                      formatVarnames(leftPayloadIUs.v));
             });
 
         provideIU(&ts, format("std::accumulate({0}.begin(), {0}.end(), 0)",
                               c.varname));
-        print("auto {} = {}({});\n", ht2.varname, hashtableType, ts.varname);
+        print("auto {} = {}({});\n", ht.varname, hashtableType, ts.varname);
 
         string parallelFor =
             format("tbb::parallel_for({}.range(), [&](auto {})", st.varname,
@@ -216,7 +207,7 @@ struct ParallelHashJoin : public ParallelOperator {
                         format("for (uint64_t i = 0; i < (*{}).size(); i++)",
                                v.varname),
                         [&] {
-                            print("{}.insert(&((*{})[i]));\n", ht2.varname,
+                            print("{}.insert(&((*{})[i]));\n", ht.varname,
                                   v.varname);
                         });
                 });
@@ -231,25 +222,30 @@ struct ParallelHashJoin : public ParallelOperator {
             [&]() {
                 // iterate over matches
                 genBlock(
-                    format("for (auto range = {}.equal_range({{{}}}); "
-                           "range.first!=range.second; range.first++)",
+                    format("for (auto p = {}.equal_range({{{}}}); "
+                           "p.first.entry != p.second.entry; p.first.entry = "
+                           "p.first.entry->next)",
                            ht.varname, formatVarnames(rightKeyIUs)),
                     [&]() {
-                        // unpack payload
-                        unsigned countP = 0;
-                        for (IU* iu : leftPayloadIUs)
-                            provideIU(iu, format("get<{}>(range.first->second)",
-                                                 countP++));
-                        // unpack keys if needed
-                        for (unsigned i = 0; i < leftKeyIUs.size(); i++) {
-                            IU* iu = leftKeyIUs[i];
-                            if (required.contains(iu))
+                        genBlock("if (p.first.entry->key == p.first.key)", [&] {
+                            // unpack payload
+                            unsigned countP = 0;
+                            for (IU* iu : leftPayloadIUs)
                                 provideIU(
-                                    iu,
-                                    format("get<{}>(range.first->first)", i));
-                        }
-                        // consume
-                        consume();
+                                    iu, format("get<{}>(p.first.entry->value)",
+                                               countP++));
+                            // unpack keys if needed
+                            for (unsigned i = 0; i < leftKeyIUs.size(); i++) {
+                                IU* iu = leftKeyIUs[i];
+                                if (required.contains(iu))
+                                    provideIU(
+                                        iu,
+                                        format("get<{}>(p.first.entry->key)",
+                                               i));
+                            }
+                            // consume
+                            consume();
+                        });
                     });
             });
     }
