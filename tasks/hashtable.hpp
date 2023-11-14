@@ -98,8 +98,12 @@ struct Hashtable {
         do {
             oldEnt = ht[slot].load();
 #ifdef VARIANT_tagged
-            newEntry->next = removeTag(oldEnt);
-            newEnt = newEntry | (oldEnt & tagMask) | addTag(newEntry->hash);
+            uint64_t oltEntInt = (uint64_t)oldEnt;
+            uint64_t newEntInt = (uint64_t)newEnt;
+
+            newEntry->next = removeTag(oltEntInt);
+            newEnt = (Entry<K, V> *)(newEntInt | (oltEntInt & tagMask) |
+                                     addTag(hashKey(newEntry->key) & mask));
 #else
             newEntry->next = oldEnt;
             newEnt = newEntry;
