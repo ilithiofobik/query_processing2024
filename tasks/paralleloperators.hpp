@@ -132,6 +132,10 @@ struct ParallelHashJoin : public ParallelOperator {
     IU st_loc{"storage_local", Type::Undefined};
     IU c{"counter", Type::Undefined};
     IU c_loc{"counter_local", Type::Undefined};
+    IU ts{"total_size", Type::BigInt};
+    IU ht2{"ht", Type::Undefined};
+    IU r{"r", Type::Undefined};
+    IU v{"v", Type::Undefined};
 
     // constructor
     ParallelHashJoin(unique_ptr<ParallelOperator> left,
@@ -167,10 +171,12 @@ struct ParallelHashJoin : public ParallelOperator {
               formatTypes(leftKeyIUs), formatTypes(leftPayloadIUs.v),
               ht.varname);
         // build local storage
-        string entryType =
-            format("Entry<tuple<{}>, tuple<{}>>", formatTypes(leftKeyIUs),
+        string tuplesTypes =
+            format("tuple<{}>, tuple<{}>", formatTypes(leftKeyIUs),
                    formatTypes(leftPayloadIUs.v));
+        string entryType = format("Entry<{}>", tuplesTypes);
         string vecType = format("std::vector<{}>", entryType);
+        string hashtableType = format("Hashtable<{}>", tuplesTypes);
 
         print("tbb::enumerable_thread_specific<{}> {};\n", vecType, st.varname);
         print("tbb::enumerable_thread_specific<int64_t> {};\n", c.varname);
@@ -192,6 +198,32 @@ struct ParallelHashJoin : public ParallelOperator {
                       formatVarnames(leftKeyIUs),
                       formatVarnames(leftPayloadIUs.v));
             });
+
+        provideIU(&ts, format("std::accumulate({0}.begin(), {0}.end(), 0)",
+                              c.varname));
+        print("auto {} = {}({});\n", ht2.varname, hashtableType, ts.varname);
+
+        string parallelFor =
+            format("tbb::parallel_for({}.range(), [&](auto {})", st.varname,
+                   r.varname);
+
+        genBlock(parallelFor, [&]() {
+            genBlock(
+                format("for (auto {0} = {1}.begin(); {0} != {1}.end(); {0}++)",
+                       v.varname, r.varname),
+                [&]() {
+                    genBlock(
+                        format("for (uint64_t i = 0; i < (*{}).size(); i++)",
+                               v.varname),
+                        [&] {
+                            print("{}.insert(&((*{})[i]));\n", ht2.varname,
+                                  v.varname);
+                        });
+                });
+        });
+
+        // closing parallel for
+        print(");");
 
         // probe hash table
         right->produce(
