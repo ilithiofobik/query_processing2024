@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 
 #include "qp/common/memory.hpp"
@@ -23,13 +24,13 @@ template <typename K, typename V>
 struct Hashtable {
     uint64_t htSize;
     uint64_t mask;
-    Entry<K, V> **ht;
+    std::atomic<Entry<K, V> *> *ht;
 
     Hashtable(uint64_t size) {
         htSize = 1ull << ((8 * sizeof(uint64_t)) -
                           __builtin_clzl(size));  // next power of two
         mask = htSize - 1;
-        ht = reinterpret_cast<Entry<K, V> **>(
+        ht = reinterpret_cast<std::atomic<Entry<K, V> *> *>(
             qp::mem::alloc(sizeof(uint64_t) * htSize));
     }
 
@@ -43,7 +44,7 @@ struct Hashtable {
     std::pair<equal_range_iterator, equal_range_iterator> equal_range(K key) {
         uint64_t hash = hashKey(key);
         uint64_t slot = hash & mask;
-        uint64_t firstAddress = ht[slot];
+        uint64_t firstAddress = (uint64_t)ht[slot].load();
         Entry<K, V> *beginIter = nullptr;
         Entry<K, V> *endIter = nullptr;
 
@@ -68,7 +69,7 @@ struct Hashtable {
             }
         }
 #else
-        Entry<K, V> *it = firstAddress;
+        Entry<K, V> *it = (Entry<K, V> *)firstAddress;
 
         while (it) {
             if (it->key == key) {
@@ -94,10 +95,10 @@ struct Hashtable {
 
     void insert(Entry<K, V> *newEntry) {
         uint64_t slot = hashKey(newEntry->key) & mask;
-        auto oldEnt = ht[slot];
-        auto newEnt = newEntry;
+        Entry<K, V> *oldEnt = ht[slot].load();
+        Entry<K, V> *newEnt = newEntry;
         do {
-            oldEnt = ht[slot];
+            oldEnt = ht[slot].load();
 #ifdef VARIANT_tagged
             newEntry->next = removeTag(oldEnt);
             newEnt = newEntry | (oldEnt & tagMask) | addTag(newEntry->hash);
@@ -106,8 +107,7 @@ struct Hashtable {
             newEnt = newEntry;
 #endif
 
-        } while (!std::atomic_compare_exchange_weak_explicit(ht[slot], oldEnt,
-                                                             newEnt));
+        } while (!ht[slot].compare_exchange_weak(oldEnt, newEnt));
     }
 
    private:
