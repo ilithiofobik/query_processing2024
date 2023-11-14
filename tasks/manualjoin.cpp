@@ -14,13 +14,10 @@
 #include <qp/common/perfevent.hpp>
 
 #include "hashtable.hpp"
-#include "local_buffer.hpp"
 
 using namespace p2c;
 
 inline double roundPrice(double a) { return ceil(a * 100.0) / 100.0; }
-
-typedef tbb::concurrent_hash_map<int64_t, double>::const_accessor PriceAccessor;
 
 /**
  * select count(*), sum(o_totalprice - l_discount)
@@ -50,8 +47,6 @@ std::pair<int64_t, double> manual_join(unsigned threads, const TPCH& db) {
 
     tbb::enumerable_thread_specific<int64_t> counter;
 
-    printf("DUPA 1\n");
-
     tbb::parallel_for(o_range, [&](auto r) {
         std::vector<Entry<std::tuple<int64_t>, std::tuple<double>>>&
             storage_local = storage.local();
@@ -65,28 +60,16 @@ std::pair<int64_t, double> manual_join(unsigned threads, const TPCH& db) {
         }
     });
 
-    printf("DUPA 2\n");
-
     int64_t total_size = std::accumulate(counter.begin(), counter.end(), 0);
     auto ht = Hashtable<std::tuple<int64_t>, std::tuple<double>>(total_size);
-
-    printf("DUPA 3\n");
 
     tbb::parallel_for(storage.range(), [&](auto r) {
         for (auto v = r.begin(); v != r.end(); v++) {
             for (uint64_t i = 0; i < (*v).size(); i++) {
                 ht.insert(&((*v)[i]));
             }
-            // for (auto& e : *v) {
-            //     ht.insert(e);
-            // }
-            // for (auto it = (*v).begin(); it != (*v).end(); it++) {
-            //     ht.insert(*it);
-            // }
         }
     });
-
-    printf("DUPA 4\n");
 
     tbb::parallel_for(l_range, [&](auto r) {
         int64_t& local_count = count.local();
@@ -95,29 +78,21 @@ std::pair<int64_t, double> manual_join(unsigned threads, const TPCH& db) {
         // iterate over lineitems for given thread
         for (uint64_t l = r.begin(); l < r.end(); l++) {
             int64_t l_orderkey = db.lineitem.l_orderkey[l];
-            std::tuple<long int> key = {l_orderkey};
-            auto it = ht.keyToBucket(key);
+            auto p = ht.equal_range({l_orderkey});
+            auto it = p.first;
 
-            while (it != NULL) {
-                // std::cout << "key: " << get<0>(it->key) << std::endl;
-                // std::cout << "value: " << get<0>(it->value) << std::endl;
-                // std::cout << "next: " << it->next << std::endl;
-
-                if (get<0>(it->key) == l_orderkey) {
-                    double o_totalprice = get<0>(it->value);
+            while (it.entry != p.second.entry) {
+                if (it.entry->key == it.key) {
+                    double o_totalprice = get<0>(it.entry->value);
                     if (o_totalprice > 1000.0) {
                         local_count++;
                         local_sum += o_totalprice - db.lineitem.l_discount[l];
                     }
                 }
-                it = it->next;
+                it.entry = it.entry->next;
             }
-
-            // std::cout << "done\n";
         }
     });
-
-    printf("DUPA 5\n");
 
     int64_t count_out = std::accumulate(count.begin(), count.end(), 0);
     double sum_out = std::accumulate(sum.begin(), sum.end(), 0.0);
