@@ -34,12 +34,61 @@ struct Hashtable {
 
     ~Hashtable() { qp::mem::dealloc(ht, htSize); }
 
-    struct equal_range_iterator {};
+    struct equal_range_iterator {
+        K key;
+        Entry<K, V> *entry;
+    };
 
     std::pair<equal_range_iterator, equal_range_iterator> equal_range(K key) {
+        uint64_t hash = hashKey(key);
+        uint64_t slot = hash & mask;
+        uint64_t firstAddress = ht[slot];
+        Entry<K, V> *beginIter = nullptr;
+        Entry<K, V> *endIter = nullptr;
+
 #ifdef VARIANT_tagged
+        if (firstAddress & addTag(hash)) {
+            Entry<K, V> *it = removeTag(firstAddress);
+
+            while (it) {
+                if (it->key == key) {
+                    beginIter = it;
+                    endIter = it->next;
+                    break;
+                }
+                it = it->next;
+            }
+
+            while (it) {
+                if (it->key == key) {
+                    endIter = it->next;
+                }
+                it = it->next;
+            }
+        }
 #else
+        Entry<K, V> *it = firstAddress;
+
+        while (it) {
+            if (it->key == key) {
+                beginIter = it;
+                endIter = it->next;
+                break;
+            }
+            it = it->next;
+        }
+
+        while (it) {
+            if (it->key == key) {
+                endIter = it->next;
+            }
+            it = it->next;
+        }
 #endif
+
+        equal_range_iterator begin = {key, beginIter};
+        equal_range_iterator end = {key, endIter};
+        return std::make_pair(begin, end);
     }
 
     void insert(Entry<K, V> *newEntry) {
@@ -50,7 +99,7 @@ struct Hashtable {
             oldEnt = ht[slot];
 #ifdef VARIANT_tagged
             newEntry->next = removeTag(oldEnt);
-            newEnt = newEntry | (oldEnt & tagMask) | addTag(entry->hash);
+            newEnt = newEntry | (oldEnt & tagMask) | addTag(newEntry->hash);
 #else
             newEntry->next = oldEnt;
             newEnt = newEntry;
