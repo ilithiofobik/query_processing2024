@@ -3,6 +3,7 @@
 #include <cstdint>
 
 #include "qp/common/memory.hpp"
+#include "qp/common/util.hpp"
 
 using namespace qp;
 
