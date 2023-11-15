@@ -274,6 +274,8 @@ struct ParallelTopK : public ParallelOperator {
     IU heap{"heap", Type::Undefined};
     IU heap_loc{"heap_local", Type::Undefined};
     IU elem{"elem", Type::Undefined};
+    IU it{"it", Type::Undefined};
+    IU v{"v", Type::Undefined};
     // IU c{"counter", Type::Undefined};
     // IU c_loc{"counter_local", Type::Undefined};
     // IU ts{"total_size", Type::BigInt};
@@ -304,6 +306,7 @@ struct ParallelTopK : public ParallelOperator {
             [&]() {
                 print("{}& {} = {}.local();\n", vecType, heap_loc.varname,
                       heap.varname);
+                print("{}.reserve({});\n", heap_loc.varname, K);
             },
             [&]() {
                 print("{} {} = {{{}}};\n", tupleType, elem.varname,
@@ -313,23 +316,61 @@ struct ParallelTopK : public ParallelOperator {
                              print("{}.push_back({});\n", heap_loc.varname,
                                    elem.varname);
                          });
-                genBlock("else", [&] {
-                    print("std::pop_heap({0}.begin(), {0}.end());\n",
-                          heap_loc.varname);
-                    genBlock(format("if ({} < {}.back())", elem.varname,
-                                    heap_loc.varname),
-                             [&] {
-                                 print("{}.pop_back();\n", heap_loc.varname);
-                                 print("{}.push_back({});\n", heap_loc.varname,
-                                       elem.varname);
-                             });
-                });
-
-                print("std::push_heap({0}.begin(), {0}.end());\n",
-                      heap_loc.varname);
-
-                consume();
+                genBlock(format("else if ({} < {}.front())", elem.varname,
+                                heap_loc.varname),
+                         [&] {
+                             print("std::pop_heap({0}.begin(), {0}.end());\n",
+                                   heap_loc.varname);
+                             print("{}.pop_back();\n", heap_loc.varname);
+                             print("{}.push_back({});\n", heap_loc.varname,
+                                   elem.varname);
+                             print("std::push_heap({0}.begin(), {0}.end());\n",
+                                   heap_loc.varname);
+                         });
             });
+
+        print("{} {}({});\n", vecType, v.varname, K);
+        genBlock(
+            format("for (auto {1} = {0}.begin(); {1} != {0}.end(); {1}++)",
+                   heap.varname, it.varname),
+            [&] {
+                genBlock(
+                    format("for({}& {}: (*{}))", tupleType, elem.varname,
+                           it.varname),
+                    [&] {
+                        genBlock(format("if ({}.size() < {})", v.varname, K),
+                                 [&] {
+                                     print("{}.push_back({});\n", v.varname,
+                                           elem.varname);
+                                 });
+                        genBlock(
+                            format("else if ({} < {}.front())", elem.varname,
+                                   v.varname),
+                            [&] {
+                                print(
+                                    "std::pop_heap({0}.begin(), {0}.end());\n",
+                                    v.varname);
+                                print("{}.pop_back();\n", v.varname);
+                                print("{}.push_back({});\n", v.varname,
+                                      elem.varname);
+                                print(
+                                    "std::push_heap({0}.begin(), {0}.end());\n",
+                                    v.varname);
+                            });
+                    });
+            });
+
+        print("sort({0}.begin(), {0}.end());\n", v.varname);
+
+        // provide the tuples as requiredIU to the consumer
+        genBlock(format("for ({} {}: {})", tupleType, it.varname, v.varname),
+                 [&] {
+                     for (long unsigned int i = 0; i < required.v.size(); i++) {
+                         provideIU(required.v[i],
+                                   format("get<{}>({})", i, it.varname));
+                     }
+                     consume();
+                 });
     }
 };
 ////////////////////////////////////////////////////////////////////////////////
