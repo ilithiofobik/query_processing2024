@@ -159,4 +159,24 @@ struct ParallelHashJoin : public ParallelOperator {
    }
 };
 
+struct ParallelTopK : public ParallelOperator {
+   unique_ptr<ParallelOperator> input;
+   vector<IU*> keyIUs;
+   const uint64_t K;
+
+   // constructor
+   ParallelTopK(unique_ptr<ParallelOperator> input, const vector<IU*>& keyIUs, const uint64_t k) : input(std::move(input)), keyIUs(keyIUs), K(k) {}
+
+   // destructor
+   ~ParallelTopK() {}
+
+   IUSet availableIUs() override {
+      return input->availableIUs();
+   }
+
+   // maybe change the signature?
+   void produce(const IUSet& required, ConsumerFn consume) override {
+      
+   }
+};
 ////////////////////////////////////////////////////////////////////////////////
