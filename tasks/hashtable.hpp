@@ -59,7 +59,7 @@ struct Hashtable {
 
 #ifdef VARIANT_tagged
         uint64_t firstAddress = (uint64_t)ht[slot].load();
-        if (firstAddress & addTag(hash)) {
+        if (firstAddress & addTag(slot)) {
             Entry<K, V> *it = removeTag(firstAddress);
 
             while (it != NULL) {
@@ -103,7 +103,7 @@ struct Hashtable {
 
             newEntry->next = removeTag(oltEntInt);
             newEnt = (Entry<K, V> *)(newEntInt | (oltEntInt & tagMask) |
-                                     addTag(hashKey(newEntry->key) & mask));
+                                     addTag(slot));
 #else
             newEntry->next = oldEnt;
             newEnt = newEntry;
