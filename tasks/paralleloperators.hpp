@@ -139,14 +139,18 @@ struct ParallelHashJoin : public ParallelOperator {
     unique_ptr<ParallelOperator> left;
     unique_ptr<ParallelOperator> right;
     vector<IU*> leftKeyIUs, rightKeyIUs;
+    // storage / local buffer
     IU st{"storage", Type::Undefined};
     IU st_loc{"storage_local", Type::Undefined};
+    // counter of all tuples
     IU c{"counter", Type::Undefined};
     IU c_loc{"counter_local", Type::Undefined};
+    // number of all tuples
     IU ts{"total_size", Type::BigInt};
+    // hashtable
     IU ht{"ht", Type::Undefined};
+    // range iterator
     IU r{"r", Type::Undefined};
-    IU v{"v", Type::Undefined};
 
     // constructor
     ParallelHashJoin(unique_ptr<ParallelOperator> left,
@@ -176,8 +180,6 @@ struct ParallelHashJoin : public ParallelOperator {
             leftRequiredIUs -
             IUSet(
                 leftKeyIUs);  // these we need to store in hash table as payload
-
-        // build local storage
         string tuplesTypes =
             format("tuple<{}>, tuple<{}>", formatTypes(leftKeyIUs),
                    formatTypes(leftPayloadIUs.v));
@@ -185,25 +187,32 @@ struct ParallelHashJoin : public ParallelOperator {
         string vecType = format("std::vector<{}>", entryType);
         string hashtableType = format("Hashtable<{}>", tuplesTypes);
 
+        // create storage for each thread
         print("tbb::enumerable_thread_specific<{}> {};\n", vecType, st.varname);
+        // create counter for each thread
         print("tbb::enumerable_thread_specific<int64_t> {};\n", c.varname);
 
         left->produce(
             leftRequiredIUs,
             [&]() {
+                // pass creating local as morsel init
                 print("{}& {} = {}.local();\n", vecType, st_loc.varname,
                       st.varname);
                 print("int64_t& {} = {}.local();\n", c_loc.varname, c.varname);
             },
             [&]() {
+                // add to local
                 print("{}.push_back({}({{{}}}, {{{}}}));\n", st_loc.varname,
                       entryType, formatVarnames(leftKeyIUs),
                       formatVarnames(leftPayloadIUs.v));
+                // count element
                 print("{}++;\n", c_loc.varname);
             });
 
+        // sum up number of all tuples
         provideIU(&ts, format("std::accumulate({0}.begin(), {0}.end(), 0)",
                               c.varname));
+        // initialize hashtable
         print("auto {} = {}({});\n", ht.varname, hashtableType, ts.varname);
 
         string parallelFor =
@@ -219,6 +228,7 @@ struct ParallelHashJoin : public ParallelOperator {
                         format("for (uint64_t i = 0; i < (*{}).size(); i++)",
                                v.varname),
                         [&] {
+                            // insert each entry to hashtable (lock-free)
                             print("{}.insert(&((*{})[i]));\n", ht.varname,
                                   v.varname);
                         });
