@@ -276,12 +276,6 @@ struct ParallelTopK : public ParallelOperator {
     IU elem{"elem", Type::Undefined};
     IU it{"it", Type::Undefined};
     IU v{"v", Type::Undefined};
-    // IU c{"counter", Type::Undefined};
-    // IU c_loc{"counter_local", Type::Undefined};
-    // IU ts{"total_size", Type::BigInt};
-    // IU ht{"ht", Type::Undefined};
-    // IU r{"r", Type::Undefined};
-    // IU v{"v", Type::Undefined};
 
     // constructor
     ParallelTopK(unique_ptr<ParallelOperator> input, const vector<IU*>& keyIUs,
@@ -298,24 +292,30 @@ struct ParallelTopK : public ParallelOperator {
         string tupleType = format("tuple<{}>", formatTypes(keyIUs));
         string vecType = format("std::vector<{}>", tupleType);
 
+        // heap as a vector for each thread
         print("tbb::enumerable_thread_specific<{}> {};\n", vecType,
               heap.varname);
 
         input->produce(
             required,
             [&]() {
+                // read your vector
                 print("{}& {} = {}.local();\n", vecType, heap_loc.varname,
                       heap.varname);
+                // reserve memory for exactly k elements
                 print("{}.reserve({});\n", heap_loc.varname, K);
             },
             [&]() {
                 print("{} {} = {{{}}};\n", tupleType, elem.varname,
                       formatVarnames(keyIUs));
+                // if heap is not full just push
                 genBlock(format("if ({}.size() < {})", heap_loc.varname, K),
                          [&] {
                              print("{}.push_back({});\n", heap_loc.varname,
                                    elem.varname);
                          });
+                // else check if the new element is better than the worst in
+                // heap, if so pop the max elem and add new one
                 genBlock(format("else if ({} < {}.front())", elem.varname,
                                 heap_loc.varname),
                          [&] {
@@ -329,12 +329,14 @@ struct ParallelTopK : public ParallelOperator {
                          });
             });
 
+        // declar global vector collecting all heaps
         print("{} {}({});\n", vecType, v.varname, K);
         genBlock(
             format("for (auto {1} = {0}.begin(); {1} != {0}.end(); {1}++)",
                    heap.varname, it.varname),
             [&] {
                 genBlock(
+                    // same logic for adding to heap as before
                     format("for({}& {}: (*{}))", tupleType, elem.varname,
                            it.varname),
                     [&] {
@@ -360,9 +362,10 @@ struct ParallelTopK : public ParallelOperator {
                     });
             });
 
+        // sort the global heap
         print("sort({0}.begin(), {0}.end());\n", v.varname);
 
-        // provide the tuples as requiredIU to the consumer
+        // provide the tuples to the consumer
         genBlock(format("for ({} {}: {})", tupleType, it.varname, v.varname),
                  [&] {
                      for (long unsigned int i = 0; i < required.v.size(); i++) {
