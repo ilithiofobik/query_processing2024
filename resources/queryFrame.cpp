@@ -44,7 +44,7 @@ int main(int argc, char** argv) {
 
    for (unsigned run = 0; run < run_count; ++run) {
     {
-      PerfEventBlock perf(1, params, run == 0);
+      PerfEventBlock perf(0, params, run == 0);
       #include "p2c-query.cpp"
     }
    }

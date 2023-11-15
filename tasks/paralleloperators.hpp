@@ -67,6 +67,11 @@ struct ParallelScan : public ParallelOperator {
    }
 
    void produce(const IUSet& required, ConsumerFn consume) override {
+      // ===============================================
+      // Sets the scale of perf event counters.
+      // Don't change this line.
+      print("perf.scale += db.{}.tupleCount;", relName);
+      // ===============================================
       genBlock(format("for (uint64_t i = 0; i != db.{}.tupleCount; i++)", relName), [&]() {
          for (IU* iu : required)
             provideIU(iu, format("db.{}.{}[i]", relName, iu->name));
