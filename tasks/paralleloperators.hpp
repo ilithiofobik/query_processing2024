@@ -73,6 +73,12 @@ struct ParallelScan : public ParallelOperator {
 
     void produce(const IUSet& required, MorselInitFn morsel,
                  ConsumerFn consume) override {
+        // ===============================================
+        // Sets the scale of perf event counters.
+        // Don't change this line.
+        print("perf.scale += db.{}.tupleCount;", relName);
+        // ===============================================
+
         string parallelFor = format(
             "tbb::parallel_for(tbb::blocked_range<uint64_t>(0, "
             "db.{}.tupleCount),[&](auto r)",
@@ -265,6 +271,15 @@ struct ParallelTopK : public ParallelOperator {
     unique_ptr<ParallelOperator> input;
     vector<IU*> keyIUs;
     const uint64_t K;
+    IU heap{"heap", Type::Undefined};
+    IU heap_loc{"heap_local", Type::Undefined};
+    IU elem{"elem", Type::Undefined};
+    // IU c{"counter", Type::Undefined};
+    // IU c_loc{"counter_local", Type::Undefined};
+    // IU ts{"total_size", Type::BigInt};
+    // IU ht{"ht", Type::Undefined};
+    // IU r{"r", Type::Undefined};
+    // IU v{"v", Type::Undefined};
 
     // constructor
     ParallelTopK(unique_ptr<ParallelOperator> input, const vector<IU*>& keyIUs,
@@ -276,7 +291,45 @@ struct ParallelTopK : public ParallelOperator {
 
     IUSet availableIUs() override { return input->availableIUs(); }
 
-    // maybe change the signature?
-    void produce(const IUSet& required, ConsumerFn consume) override {}
+    void produce(const IUSet& required, MorselInitFn morsel,
+                 ConsumerFn consume) override {
+        string tupleType = format("tuple<{}>", formatTypes(keyIUs));
+        string vecType = format("std::vector<{}>", tupleType);
+
+        print("tbb::enumerable_thread_specific<{}> {};\n", vecType,
+              heap.varname);
+
+        input->produce(
+            required,
+            [&]() {
+                print("{}& {} = {}.local();\n", vecType, heap_loc.varname,
+                      heap.varname);
+            },
+            [&]() {
+                print("{} {} = {{{}}};\n", tupleType, elem.varname,
+                      formatVarnames(keyIUs));
+                genBlock(format("if ({}.size() < {})", heap_loc.varname, K),
+                         [&] {
+                             print("{}.push_back({});\n", heap_loc.varname,
+                                   elem.varname);
+                         });
+                genBlock("else", [&] {
+                    print("std::pop_heap({0}.begin(), {0}.end());\n",
+                          heap_loc.varname);
+                    genBlock(format("if ({} < {}.back())", elem.varname,
+                                    heap_loc.varname),
+                             [&] {
+                                 print("{}.pop_back();\n", heap_loc.varname);
+                                 print("{}.push_back({});\n", heap_loc.varname,
+                                       elem.varname);
+                             });
+                });
+
+                print("std::push_heap({0}.begin(), {0}.end());\n",
+                      heap_loc.varname);
+
+                consume();
+            });
+    }
 };
 ////////////////////////////////////////////////////////////////////////////////
