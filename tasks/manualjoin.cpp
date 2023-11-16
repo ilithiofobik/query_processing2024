@@ -78,18 +78,14 @@ std::pair<int64_t, double> manual_join(unsigned threads, const TPCH& db) {
         // iterate over lineitems for given thread
         for (uint64_t l = r.begin(); l < r.end(); l++) {
             int64_t l_orderkey = db.lineitem.l_orderkey[l];
-            auto p = ht.equal_range({l_orderkey});
-            auto it = p.first;
 
-            while (it.entry != p.second.entry) {
-                if (it.entry->key == it.key) {
-                    double o_totalprice = get<0>(it.entry->value);
-                    if (o_totalprice > 1000.0) {
-                        local_count++;
-                        local_sum += o_totalprice - db.lineitem.l_discount[l];
-                    }
+            for (auto p = ht.equal_range({l_orderkey}); p.first != p.second;
+                 ++p.first) {
+                double o_totalprice = get<0>(p.first.entry->value);
+                if (o_totalprice > 1000.0) {
+                    local_count++;
+                    local_sum += o_totalprice - db.lineitem.l_discount[l];
                 }
-                it.entry = it.entry->next;
             }
         }
     });

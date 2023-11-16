@@ -49,13 +49,26 @@ struct Hashtable {
     struct equal_range_iterator {
         K key;
         Entry<K, V> *entry;
+
+        bool operator==(const equal_range_iterator &a) const {
+            return (key == a.key && entry == a.entry);
+        }
+        bool operator!=(const equal_range_iterator &a) const {
+            return (entry != a.entry || key != a.key);
+        }
+        equal_range_iterator &operator++() {
+            do {
+                entry = entry->next;
+            } while (entry != NULL && entry->key != key);
+
+            return *this;
+        }
     };
 
     std::pair<equal_range_iterator, equal_range_iterator> equal_range(K key) {
         uint64_t hash = hashKey(key);
         uint64_t slot = hash & mask;
         Entry<K, V> *beginIter = NULL;
-        Entry<K, V> *endIter = NULL;
 
 #ifdef VARIANT_tagged
         uint64_t firstAddress = (uint64_t)ht[slot].load();
@@ -64,10 +77,8 @@ struct Hashtable {
 
             while (it != NULL) {
                 if (it->key == key) {
-                    if (beginIter == NULL) {
-                        beginIter = it;
-                    }
-                    endIter = it->next;
+                    beginIter = it;
+                    break;
                 }
                 it = it->next;
             }
@@ -77,17 +88,15 @@ struct Hashtable {
 
         while (it != NULL) {
             if (it->key == key) {
-                if (beginIter == NULL) {
-                    beginIter = it;
-                }
-                endIter = it->next;
+                beginIter = it;
+                break;
             }
             it = it->next;
         }
 #endif
 
         equal_range_iterator begin = {key, beginIter};
-        equal_range_iterator end = {key, endIter};
+        equal_range_iterator end = {key, NULL};
         return std::make_pair(begin, end);
     }
 

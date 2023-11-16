@@ -151,6 +151,8 @@ struct ParallelHashJoin : public ParallelOperator {
     IU ht{"ht", Type::Undefined};
     // range iterator
     IU r{"r", Type::Undefined};
+    // vector iterator
+    IU v{"v", Type::Undefined};
 
     // constructor
     ParallelHashJoin(unique_ptr<ParallelOperator> left,
@@ -245,33 +247,29 @@ struct ParallelHashJoin : public ParallelOperator {
                 // iterate over matches
                 genBlock(
                     format("for (auto p = {}.equal_range({{{}}}); "
-                           "p.first.entry != p.second.entry; p.first.entry = "
-                           "p.first.entry->next)",
+                           "p.first != p.second; ++p.first)",
                            ht.varname, formatVarnames(rightKeyIUs)),
                     [&]() {
-                        genBlock("if (p.first.entry->key == p.first.key)", [&] {
-                            // unpack payload
-                            unsigned countP = 0;
-                            for (IU* iu : leftPayloadIUs)
+                        // unpack payload
+                        unsigned countP = 0;
+                        for (IU* iu : leftPayloadIUs)
+                            provideIU(iu,
+                                      format("get<{}>(p.first.entry->value)",
+                                             countP++));
+                        // unpack keys if needed
+                        std::unordered_set<string> used;
+                        for (unsigned i = 0; i < leftKeyIUs.size(); i++) {
+                            IU* iu = leftKeyIUs[i];
+                            if (required.contains(iu) &&
+                                !used.contains(iu->varname)) {
                                 provideIU(
-                                    iu, format("get<{}>(p.first.entry->value)",
-                                               countP++));
-                            // unpack keys if needed
-                            std::unordered_set<string> used;
-                            for (unsigned i = 0; i < leftKeyIUs.size(); i++) {
-                                IU* iu = leftKeyIUs[i];
-                                if (required.contains(iu) &&
-                                    !used.contains(iu->varname)) {
-                                    provideIU(
-                                        iu,
-                                        format("get<{}>(p.first.entry->key)",
-                                               i));
-                                    used.insert(iu->varname);
-                                }
+                                    iu,
+                                    format("get<{}>(p.first.entry->key)", i));
+                                used.insert(iu->varname);
                             }
-                            // consume
-                            consume();
-                        });
+                        }
+                        // consume
+                        consume();
                     });
             });
     }
