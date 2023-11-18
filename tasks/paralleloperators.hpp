@@ -321,6 +321,8 @@ struct ParallelTopK : public ParallelOperator {
                          [&] {
                              print("{}.push_back({});\n", heap_loc.varname,
                                    elem.varname);
+                             print("std::push_heap({0}.begin(), {0}.end());\n",
+                                   heap_loc.varname);
                          });
                 // else check if the new element is better than the worst in
                 // heap, if so pop the max elem and add new one
@@ -329,16 +331,19 @@ struct ParallelTopK : public ParallelOperator {
                          [&] {
                              print("std::pop_heap({0}.begin(), {0}.end());\n",
                                    heap_loc.varname);
-                             print("{}.pop_back();\n", heap_loc.varname);
-                             print("{}.push_back({});\n", heap_loc.varname,
+                             // print("{}.pop_back();\n", v.varname);
+                             // print("{}.push_back({});\n", v.varname,
+                             //       elem.varname);
+                             print("{}.back() = {};\n", heap_loc.varname,
                                    elem.varname);
                              print("std::push_heap({0}.begin(), {0}.end());\n",
                                    heap_loc.varname);
                          });
             });
 
-        // declar global vector collecting all heaps
-        print("{} {}({});\n", vecType, v.varname, K);
+        // declare global vector collecting all heaps
+        print("{} {};\n", vecType, v.varname);
+        print("{}.reserve({});\n", v.varname, K);
         genBlock(
             format("for (auto {1} = {0}.begin(); {1} != {0}.end(); {1}++)",
                    heap.varname, it.varname),
@@ -348,11 +353,14 @@ struct ParallelTopK : public ParallelOperator {
                     format("for({}& {}: (*{}))", tupleType, elem.varname,
                            it.varname),
                     [&] {
-                        genBlock(format("if ({}.size() < {})", v.varname, K),
-                                 [&] {
-                                     print("{}.push_back({});\n", v.varname,
-                                           elem.varname);
-                                 });
+                        genBlock(
+                            format("if ({}.size() < {})", v.varname, K), [&] {
+                                print("{}.push_back({});\n", v.varname,
+                                      elem.varname);
+                                print(
+                                    "std::push_heap({0}.begin(), {0}.end());\n",
+                                    v.varname);
+                            });
                         genBlock(
                             format("else if ({} < {}.front())", elem.varname,
                                    v.varname),
@@ -360,8 +368,10 @@ struct ParallelTopK : public ParallelOperator {
                                 print(
                                     "std::pop_heap({0}.begin(), {0}.end());\n",
                                     v.varname);
-                                print("{}.pop_back();\n", v.varname);
-                                print("{}.push_back({});\n", v.varname,
+                                // print("{}.pop_back();\n", v.varname);
+                                // print("{}.push_back({});\n", v.varname,
+                                //       elem.varname);
+                                print("{}.back() = {};\n", v.varname,
                                       elem.varname);
                                 print(
                                     "std::push_heap({0}.begin(), {0}.end());\n",
