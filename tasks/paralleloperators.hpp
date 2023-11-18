@@ -297,6 +297,9 @@ struct ParallelTopK : public ParallelOperator {
 
     void produce(const IUSet& required, MorselInitFn morsel,
                  ConsumerFn consume) override {
+        // IUSet allIUs = IUSet(keyIUs) | required;
+        // vector<IU*> allIUsVec = allIUs.v;
+
         string tupleType = format("tuple<{}>", formatTypes(keyIUs));
         string vecType = format("std::vector<{}>", tupleType);
 
@@ -305,7 +308,7 @@ struct ParallelTopK : public ParallelOperator {
               heap.varname);
 
         input->produce(
-            required,
+            required | IUSet(keyIUs),
             [&]() {
                 // read your vector
                 print("{}& {} = {}.local();\n", vecType, heap_loc.varname,
@@ -322,28 +325,29 @@ struct ParallelTopK : public ParallelOperator {
         // declare global vector collecting all heaps
         print("{} {};\n", vecType, v.varname);
         print("{}.reserve({});\n", v.varname, K);
-        genBlock(format("for (auto {1} = {0}.begin(); {1} != {0}.end(); {1}++)",
-                        heap.varname, it.varname),
-                 [&] {
-                     genBlock(
-                         // same logic for adding to heap as before
-                         format("for({}& {}: (*{}))", tupleType, elem.varname,
-                                it.varname),
-                         [&] { pushToHeap(v.varname); });
-                 });
+
+        genBlock(
+            format("for (const {}& {}: {})", vecType, it.varname, heap.varname),
+            [&] {
+                genBlock(
+                    // same logic for adding to heap as before
+                    format("for(const {}& {}: {})", tupleType, elem.varname,
+                           it.varname),
+                    [&] { pushToHeap(v.varname); });
+            });
 
         // sort the global heap
         print("sort({0}.begin(), {0}.end());\n", v.varname);
 
         // provide the tuples to the consumer
-        genBlock(format("for ({}& {}: {})", tupleType, it.varname, v.varname),
-                 [&] {
-                     for (long unsigned int i = 0; i < required.v.size(); i++) {
-                         provideIU(required.v[i],
-                                   format("get<{}>({})", i, it.varname));
-                     }
-                     consume();
-                 });
+        genBlock(
+            format("for (const {}& {}: {})", tupleType, it.varname, v.varname),
+            [&] {
+                for (uint64_t i = 0; i < keyIUs.size(); i++) {
+                    provideIU(keyIUs[i], format("get<{}>({})", i, it.varname));
+                }
+                consume();
+            });
     }
 
    private:
