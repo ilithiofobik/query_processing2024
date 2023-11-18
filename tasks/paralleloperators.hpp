@@ -316,75 +316,27 @@ struct ParallelTopK : public ParallelOperator {
             [&]() {
                 print("{} {} = {{{}}};\n", tupleType, elem.varname,
                       formatVarnames(keyIUs));
-                // if heap is not full just push
-                genBlock(format("if ({}.size() < {})", heap_loc.varname, K),
-                         [&] {
-                             print("{}.push_back({});\n", heap_loc.varname,
-                                   elem.varname);
-                             print("std::push_heap({0}.begin(), {0}.end());\n",
-                                   heap_loc.varname);
-                         });
-                // else check if the new element is better than the worst in
-                // heap, if so pop the max elem and add new one
-                genBlock(format("else if ({} < {}.front())", elem.varname,
-                                heap_loc.varname),
-                         [&] {
-                             print("std::pop_heap({0}.begin(), {0}.end());\n",
-                                   heap_loc.varname);
-                             // print("{}.pop_back();\n", v.varname);
-                             // print("{}.push_back({});\n", v.varname,
-                             //       elem.varname);
-                             print("{}.back() = {};\n", heap_loc.varname,
-                                   elem.varname);
-                             print("std::push_heap({0}.begin(), {0}.end());\n",
-                                   heap_loc.varname);
-                         });
+                pushToHeap(heap_loc.varname);
             });
 
         // declare global vector collecting all heaps
         print("{} {};\n", vecType, v.varname);
         print("{}.reserve({});\n", v.varname, K);
-        genBlock(
-            format("for (auto {1} = {0}.begin(); {1} != {0}.end(); {1}++)",
-                   heap.varname, it.varname),
-            [&] {
-                genBlock(
-                    // same logic for adding to heap as before
-                    format("for({}& {}: (*{}))", tupleType, elem.varname,
-                           it.varname),
-                    [&] {
-                        genBlock(
-                            format("if ({}.size() < {})", v.varname, K), [&] {
-                                print("{}.push_back({});\n", v.varname,
-                                      elem.varname);
-                                print(
-                                    "std::push_heap({0}.begin(), {0}.end());\n",
-                                    v.varname);
-                            });
-                        genBlock(
-                            format("else if ({} < {}.front())", elem.varname,
-                                   v.varname),
-                            [&] {
-                                print(
-                                    "std::pop_heap({0}.begin(), {0}.end());\n",
-                                    v.varname);
-                                // print("{}.pop_back();\n", v.varname);
-                                // print("{}.push_back({});\n", v.varname,
-                                //       elem.varname);
-                                print("{}.back() = {};\n", v.varname,
-                                      elem.varname);
-                                print(
-                                    "std::push_heap({0}.begin(), {0}.end());\n",
-                                    v.varname);
-                            });
-                    });
-            });
+        genBlock(format("for (auto {1} = {0}.begin(); {1} != {0}.end(); {1}++)",
+                        heap.varname, it.varname),
+                 [&] {
+                     genBlock(
+                         // same logic for adding to heap as before
+                         format("for({}& {}: (*{}))", tupleType, elem.varname,
+                                it.varname),
+                         [&] { pushToHeap(v.varname); });
+                 });
 
         // sort the global heap
         print("sort({0}.begin(), {0}.end());\n", v.varname);
 
         // provide the tuples to the consumer
-        genBlock(format("for ({} {}: {})", tupleType, it.varname, v.varname),
+        genBlock(format("for ({}& {}: {})", tupleType, it.varname, v.varname),
                  [&] {
                      for (long unsigned int i = 0; i < required.v.size(); i++) {
                          provideIU(required.v[i],
@@ -392,6 +344,23 @@ struct ParallelTopK : public ParallelOperator {
                      }
                      consume();
                  });
+    }
+
+   private:
+    void pushToHeap(std::string& heapName) {
+        // if heap is not full just push
+        genBlock(format("if ({}.size() < {})", heapName, K), [&] {
+            print("{}.push_back({});\n", heapName, elem.varname);
+            print("std::push_heap({0}.begin(), {0}.end());\n", heapName);
+        });
+        // else check if the new element is better than the worst in
+        // heap, if so pop the max elem and add new one
+        genBlock(
+            format("else if ({} < {}.front())", elem.varname, heapName), [&] {
+                print("std::pop_heap({0}.begin(), {0}.end());\n", heapName);
+                print("{}.back() = {};\n", heapName, elem.varname);
+                print("std::push_heap({0}.begin(), {0}.end());\n", heapName);
+            });
     }
 };
 ////////////////////////////////////////////////////////////////////////////////
