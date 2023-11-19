@@ -20,6 +20,22 @@ using namespace p2c;
 // morsel init function
 typedef std::function<void(void)> MorselInitFn;
 
+// makes unique, keeps the order
+template <typename T>
+std::vector<T> toUnique(const std::vector<T>& v) {
+    std::unordered_set<T> used;
+    std::vector<T> result;
+
+    for (const T& e : v) {
+        if (!used.contains(e)) {
+            used.insert(e);
+            result.push_back(e);
+        }
+    }
+
+    return result;
+}
+
 struct ParallelOperator {
     virtual IUSet availableIUs() = 0;
 
@@ -86,15 +102,12 @@ struct ParallelScan : public ParallelOperator {
 
         genBlock(parallelFor, [&]() {
             morsel();
-            std::unordered_set<std::string> used;
             genBlock(format("for (uint64_t i = r.begin(); i < r.end(); i++)"),
                      [&]() {
-                         for (IU* iu : required) {
-                             if (!used.contains(iu->varname)) {
-                                 provideIU(iu, format("db.{}.{}[i]", relName,
-                                                      iu->name));
-                                 used.insert(iu->varname);
-                             }
+                         for (IU* iu : toUnique(required.v)) {
+                             std::string dbValue =
+                                 format("db.{}.{}[i]", relName, iu->name);
+                             provideIU(iu, dbValue);
                          }
                          consume();
                      });
@@ -178,10 +191,8 @@ struct ParallelHashJoin : public ParallelOperator {
             (required & left->availableIUs()) | IUSet(leftKeyIUs);
         IUSet rightRequiredIUs =
             (required & right->availableIUs()) | IUSet(rightKeyIUs);
-        IUSet leftPayloadIUs =
-            leftRequiredIUs -
-            IUSet(
-                leftKeyIUs);  // these we need to store in hash table as payload
+        // these we need to store in hash table as payload
+        IUSet leftPayloadIUs = leftRequiredIUs - IUSet(leftKeyIUs);
         string tuplesTypes =
             format("tuple<{}>, tuple<{}>", formatTypes(leftKeyIUs),
                    formatTypes(leftPayloadIUs.v));
@@ -215,26 +226,24 @@ struct ParallelHashJoin : public ParallelOperator {
         provideIU(&ts, format("std::accumulate({0}.begin(), {0}.end(), 0)",
                               c.varname));
         // initialize hashtable
-        print("auto {} = {}({});\n", ht.varname, hashtableType, ts.varname);
+        print("{1} {0} = {1}({2});\n", ht.varname, hashtableType, ts.varname);
 
         string parallelFor =
             format("tbb::parallel_for({}.range(), [&](auto {})", st.varname,
                    r.varname);
 
         genBlock(parallelFor, [&]() {
-            genBlock(
-                format("for (auto {0} = {1}.begin(); {0} != {1}.end(); {0}++)",
-                       v.varname, r.varname),
-                [&]() {
-                    genBlock(
-                        format("for (uint64_t i = 0; i < (*{}).size(); i++)",
-                               v.varname),
-                        [&] {
-                            // insert each entry to hashtable (lock-free)
-                            print("{}.insert(&((*{})[i]));\n", ht.varname,
-                                  v.varname);
-                        });
-                });
+            genBlock(format("for ({}& {}: {})", vecType, v.varname, r.varname),
+                     [&]() {
+                         genBlock(
+                             format("for (uint64_t i = 0; i < {}.size(); i++)",
+                                    v.varname),
+                             [&] {
+                                 // insert each entry to hashtable (lock-free)
+                                 print("{}.insert(&{}[i]);\n", ht.varname,
+                                       v.varname);
+                             });
+                     });
         });
 
         // closing parallel for
@@ -252,10 +261,11 @@ struct ParallelHashJoin : public ParallelOperator {
                     [&]() {
                         // unpack payload
                         unsigned countP = 0;
-                        for (IU* iu : leftPayloadIUs)
+                        for (IU* iu : leftPayloadIUs) {
                             provideIU(iu,
                                       format("get<{}>(p.first.entry->value)",
                                              countP++));
+                        }
                         // unpack keys if needed
                         std::unordered_set<string> used;
                         for (unsigned i = 0; i < leftKeyIUs.size(); i++) {
@@ -268,6 +278,7 @@ struct ParallelHashJoin : public ParallelOperator {
                                 used.insert(iu->varname);
                             }
                         }
+
                         // consume
                         consume();
                     });
@@ -297,9 +308,6 @@ struct ParallelTopK : public ParallelOperator {
 
     void produce(const IUSet& required, MorselInitFn morsel,
                  ConsumerFn consume) override {
-        // IUSet allIUs = IUSet(keyIUs) | required;
-        // vector<IU*> allIUsVec = allIUs.v;
-
         string tupleType = format("tuple<{}>", formatTypes(keyIUs));
         string vecType = format("std::vector<{}>", tupleType);
 
