@@ -36,6 +36,18 @@ std::vector<T> toUnique(const std::vector<T>& v) {
     return result;
 }
 
+template <typename T>
+std::vector<tuple<uint64_t, T>> enumerate(const std::vector<T>& v) {
+    std::vector<tuple<uint64_t, T>> result;
+    result.reserve(v.size());
+
+    for (uint64_t i = 0; i < v.size(); i++) {
+        result.push_back({i, v[i]});
+    }
+
+    return result;
+}
+
 struct ParallelOperator {
     virtual IUSet availableIUs() = 0;
 
@@ -254,34 +266,34 @@ struct ParallelHashJoin : public ParallelOperator {
             rightRequiredIUs, [&]() {},
             [&]() {
                 // iterate over matches
-                genBlock(
-                    format("for (auto p = {}.equal_range({{{}}}); "
-                           "p.first != p.second; ++p.first)",
-                           ht.varname, formatVarnames(rightKeyIUs)),
-                    [&]() {
-                        // unpack payload
-                        unsigned countP = 0;
-                        for (IU* iu : leftPayloadIUs) {
-                            provideIU(iu,
-                                      format("get<{}>(p.first.entry->value)",
-                                             countP++));
-                        }
-                        // unpack keys if needed
-                        std::unordered_set<string> used;
-                        for (unsigned i = 0; i < leftKeyIUs.size(); i++) {
-                            IU* iu = leftKeyIUs[i];
-                            if (required.contains(iu) &&
-                                !used.contains(iu->varname)) {
-                                provideIU(
-                                    iu,
-                                    format("get<{}>(p.first.entry->key)", i));
-                                used.insert(iu->varname);
-                            }
-                        }
+                genBlock(format("for (auto p = {}.equal_range({{{}}}); "
+                                "p.first != p.second; ++p.first)",
+                                ht.varname, formatVarnames(rightKeyIUs)),
+                         [&]() {
+                             // unpack payload
+                             unsigned countP = 0;
+                             for (IU* iu : leftPayloadIUs) {
+                                 provideIU(
+                                     iu, format("get<{}>(p.first.entry->value)",
+                                                countP++));
+                             }
+                             // unpack keys if needed
+                             vector<tuple<uint64_t, IU*>> uniqueKeys =
+                                 toUnique(enumerate(leftKeyIUs));
+                             for (tuple<uint64_t, IU*>& p : uniqueKeys) {
+                                 uint64_t i = get<0>(p);
+                                 IU* iu = get<1>(p);
 
-                        // consume
-                        consume();
-                    });
+                                 if (required.contains(iu)) {
+                                     string keyVal = format(
+                                         "get<{}>(p.first.entry->key)", i);
+                                     provideIU(iu, keyVal);
+                                 }
+                             }
+
+                             // consume
+                             consume();
+                         });
             });
     }
 };
