@@ -37,12 +37,15 @@ std::vector<T> toUnique(const std::vector<T>& v) {
 }
 
 template <typename T>
-std::vector<tuple<uint64_t, T>> enumerate(const std::vector<T>& v) {
+std::vector<tuple<uint64_t, T>> toUniqueEnumerated(const std::vector<T>& v) {
+    std::unordered_set<T> used;
     std::vector<tuple<uint64_t, T>> result;
-    result.reserve(v.size());
 
     for (uint64_t i = 0; i < v.size(); i++) {
-        result.push_back({i, v[i]});
+        if (!used.contains(v[i])) {
+            used.insert(v[i]);
+            result.push_back({i, v[i]});
+        }
     }
 
     return result;
@@ -279,7 +282,7 @@ struct ParallelHashJoin : public ParallelOperator {
                              }
                              // unpack keys if needed
                              vector<tuple<uint64_t, IU*>> uniqueKeys =
-                                 toUnique(enumerate(leftKeyIUs));
+                                 toUniqueEnumerated(leftKeyIUs);
                              for (tuple<uint64_t, IU*>& p : uniqueKeys) {
                                  uint64_t i = get<0>(p);
                                  IU* iu = get<1>(p);
