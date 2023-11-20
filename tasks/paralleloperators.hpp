@@ -62,16 +62,29 @@ struct ParallelOperator {
 
 // Synchronized print
 void produceAndSynchronizedPrint(unique_ptr<ParallelOperator> root,
-                                 const std::vector<IU*>& ius) {
+                                 const std::vector<IU*>& ius,
+                                 uint64_t offset = 0, uint64_t count = 0) {
     IU mutex{"mutex", Type::Undefined};
     IU lock{"lock_guard", Type::Undefined};
+    IU index{"index", Type::BigInt};
+    provideIU(&index, "0");
     print("mutex {};\n", mutex.varname);
     root->produce(
         IUSet(ius), [&]() {},
         [&]() {
             print("lock_guard<mutex> {}({});", lock.varname, mutex.varname);
-            for (IU* iu : ius) print("cerr << {} << \" \";", iu->varname);
-            print("cerr << endl;\n");
+            auto if_in_offset =
+                format("if ({0} >= {1} && {0} < {2})", index.varname,
+                       to_string(offset), to_string(offset + count));
+            if (count == 0) {
+                if_in_offset =
+                    format("if ({0} >= {1})", index.varname, to_string(offset));
+            }
+            genBlock(if_in_offset, [&]() {
+                for (IU* iu : ius) print("cerr << {} << \" \";", iu->varname);
+                print("cerr << endl;\n");
+            });
+            print("{}++;", index.varname);
         });
 }
 
