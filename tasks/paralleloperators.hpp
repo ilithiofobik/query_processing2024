@@ -61,7 +61,6 @@ struct ParallelOperator {
 };
 
 // Synchronized print
-<<<<<<< HEAD
 void produceAndSynchronizedPrint(unique_ptr<ParallelOperator> root,
                                  const std::vector<IU*>& ius,
                                  uint64_t offset = 0, uint64_t count = 0) {
@@ -71,7 +70,7 @@ void produceAndSynchronizedPrint(unique_ptr<ParallelOperator> root,
     provideIU(&index, "0");
     print("mutex {};\n", mutex.varname);
     root->produce(
-        IUSet(ius), [&]() {},
+        IUSet(ius), []() {},
         [&]() {
             print("lock_guard<mutex> {}({});", lock.varname, mutex.varname);
             auto if_in_offset =
@@ -87,30 +86,6 @@ void produceAndSynchronizedPrint(unique_ptr<ParallelOperator> root,
             });
             print("{}++;", index.varname);
         });
-=======
-void produceAndSynchronizedPrint(unique_ptr<ParallelOperator> root, const std::vector<IU*>& ius, uint64_t offset = 0, uint64_t count = 0) {
-   IU mutex{"mutex", Type::Undefined};
-   IU lock{"lock_guard", Type::Undefined};
-   IU index{"index", Type::BigInt};
-   provideIU(&index, "0");
-   print("mutex {};\n", mutex.varname);
-   // TODO: Adapt to your ParallelOperator produce signature
-   root->produce(IUSet(ius), /*[](){}, */
-      [&]() {
-         print("lock_guard<mutex> {}({});", lock.varname, mutex.varname);
-            auto if_in_offset = format("if ({0} >= {1} && {0} < {2})", index.varname, to_string(offset), to_string(offset+count));
-            if (count == 0) {
-               if_in_offset  = format("if ({0} >= {1})", index.varname, to_string(offset));
-            }
-            genBlock(if_in_offset,
-            [&]() {
-               for (IU *iu : ius)
-                  print("cerr << {} << \" \";", iu->varname);
-               print("cerr << endl;\n");
-            });
-            print("{}++;", index.varname);
-      });
->>>>>>> 1c1ae57fed7716346a0ccf71303f4d70dee1e2b8
 }
 
 struct ParallelScan : public ParallelOperator {
@@ -431,72 +406,72 @@ struct ParallelTopK : public ParallelOperator {
 
 // group by operator
 struct ParallelGroupBy : public ParallelOperator {
-   enum AggFunction { Sum, Count, Max, Avg };
+    enum AggFunction { Sum, Count, Max, Avg };
 
-   struct Aggregate {
-      AggFunction aggFn; // aggregate function
-      IU* inputIU; // IU to aggregate (is nullptr when aggFn==Count)
-      IU resultIU;
-   };
+    struct Aggregate {
+        AggFunction aggFn;  // aggregate function
+        IU* inputIU;        // IU to aggregate (is nullptr when aggFn==Count)
+        IU resultIU;
+    };
 
-   unique_ptr<ParallelOperator> input;
-   IUSet groupKeyIUs;
-   vector<Aggregate> aggs;
-   uint64_t partitionCount;
+    unique_ptr<ParallelOperator> input;
+    IUSet groupKeyIUs;
+    vector<Aggregate> aggs;
+    uint64_t partitionCount;
 
-   // constructor
-   ParallelGroupBy(unique_ptr<ParallelOperator> input, const IUSet& groupKeyIUs, uint64_t partitionCount = 512) : input(std::move(input)), groupKeyIUs(groupKeyIUs), partitionCount(partitionCount) {}
+    // constructor
+    ParallelGroupBy(unique_ptr<ParallelOperator> input,
+                    const IUSet& groupKeyIUs, uint64_t partitionCount = 512)
+        : input(std::move(input)),
+          groupKeyIUs(groupKeyIUs),
+          partitionCount(partitionCount) {}
 
-   // destructor
-   ~ParallelGroupBy() {}
+    // destructor
+    ~ParallelGroupBy() {}
 
-   void addCount(const string& name) {
-      aggs.push_back({AggFunction::Count, nullptr, {name, Type::Integer}});
-   }
+    void addCount(const string& name) {
+        aggs.push_back({AggFunction::Count, nullptr, {name, Type::Integer}});
+    }
 
-   void addSum(const string& name, IU* inputIU) {
-      aggs.push_back({AggFunction::Sum, inputIU, {name, inputIU->type}});
-   }
+    void addSum(const string& name, IU* inputIU) {
+        aggs.push_back({AggFunction::Sum, inputIU, {name, inputIU->type}});
+    }
 
-   void addMax(const string& name, IU* inputIU) {
-      aggs.push_back({AggFunction::Max, inputIU, {name, inputIU->type}});
-   }
+    void addMax(const string& name, IU* inputIU) {
+        aggs.push_back({AggFunction::Max, inputIU, {name, inputIU->type}});
+    }
 
-   void addAvg(const string& name, IU* inputIU) {
-      aggs.push_back({AggFunction::Avg, inputIU, {name, Type::Double}});
-      addSum("avg_sum", inputIU);
-      addCount("avg_cnt");
-   }
+    void addAvg(const string& name, IU* inputIU) {
+        aggs.push_back({AggFunction::Avg, inputIU, {name, Type::Double}});
+        addSum("avg_sum", inputIU);
+        addCount("avg_cnt");
+    }
 
-   vector<IU*> resultIUs() {
-      vector<IU*> v;
-      for (auto&[fn, inputIU, resultIU] : aggs)
-         v.push_back(&resultIU);      
-      return v;
-   }
+    vector<IU*> resultIUs() {
+        vector<IU*> v;
+        for (auto& [fn, inputIU, resultIU] : aggs) v.push_back(&resultIU);
+        return v;
+    }
 
-   IUSet inputIUs() {
-      IUSet v;
-      for (auto&[fn, inputIU, resultIU] : aggs)
-         if (inputIU)
-            v.add(inputIU);
-      return v;
-   }
+    IUSet inputIUs() {
+        IUSet v;
+        for (auto& [fn, inputIU, resultIU] : aggs)
+            if (inputIU) v.add(inputIU);
+        return v;
+    }
 
-   IUSet availableIUs() override {
-      return groupKeyIUs | IUSet(resultIUs());
-   }
+    IUSet availableIUs() override { return groupKeyIUs | IUSet(resultIUs()); }
 
-   // TODO: Maybe adapt signature
-   void produce(const IUSet& required, ConsumerFn consume) override {
-      throw std::logic_error("Implement me!");
-   }
+    // TODO: Maybe adapt signature
+    void produce(const IUSet& required, MorselInitFn morsel,
+                 ConsumerFn consume) override {
+        throw std::logic_error("Implement me!");
+    }
 
-   IU* getIU(const string& attName) {
-      for (auto&[fn, inputIU, resultIU] : aggs)
-         if (resultIU.name == attName)
-            return &resultIU;
-      throw;
-   }
+    IU* getIU(const string& attName) {
+        for (auto& [fn, inputIU, resultIU] : aggs)
+            if (resultIU.name == attName) return &resultIU;
+        throw;
+    }
 };
 ////////////////////////////////////////////////////////////////////////////////
