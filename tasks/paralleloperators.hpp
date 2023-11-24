@@ -406,6 +406,15 @@ struct ParallelTopK : public ParallelOperator {
 
 // group by operator
 struct ParallelGroupBy : public ParallelOperator {
+    // storage / local buffer
+    IU st{"storage", Type::Undefined};
+    IU st_loc{"storage_local", Type::Undefined};
+    IU hll{"hll", Type::Undefined};
+    IU hll_loc{"hll_local", Type::Undefined};
+    IU hll_total{"hll_total", Type::Undefined};
+    IU group_tuple{"group_tuple", Type::Undefined};
+    IU hash{"hash", Type::BigInt};
+
     enum AggFunction { Sum, Count, Max, AvgSum, AvgCnt };
 
     struct Aggregate {
@@ -467,7 +476,62 @@ struct ParallelGroupBy : public ParallelOperator {
     // TODO: Maybe adapt signature
     void produce(const IUSet& required, MorselInitFn morsel,
                  ConsumerFn consume) override {
-        throw std::logic_error("Implement me!");
+        string groupTupleType = format("tuple<{}>", formatTypes(groupKeyIUs.v));
+        string resultTupleType = format("tuple<{}>", formatTypes(resultIUs()));
+        string allTuplesType =
+            format("tuple<{},{}>", groupTupleType, resultTupleType);
+        string vecType = format("vector<{}>", allTuplesType);
+
+        print("tbb::enumerable_thread_specific<HyperLogLog> {};\n",
+              hll.varname);
+        // create vector of enumarable thread specific vectors
+        // then each thread takes local for elements of this vector
+        print("vector<tbb::enumerable_thread_specific<{}>> {};\n", vecType,
+              st.varname);
+        print("{}.reserve(64);", st.varname);
+        genBlock(format("for(int i = 0; i < 64; i++)"), [&] {
+            print("tbb::enumerable_thread_specific<{}> e;\n", vecType);
+            print("{}.push_back(e);", st.varname);
+        });
+
+        // collect data in local storages
+        input->produce(
+            groupKeyIUs | inputIUs(),
+            [&]() {
+                print("HyperLogLog& {} = {}.local();\n", hll_loc.varname,
+                      hll.varname);
+                // create local vector of storages
+                // print("vector<tbb::enumerable_thread_specific<{}> *> {};\n",
+                //       vecType, st_loc.varname);
+                // // print("vector<{} *> {};\n", vecType, st_loc.varname);
+                // print("{}.reserve(64);", st_loc.varname);
+                // genBlock(format("for(int i = 0; i < 64; i++)"), [&] {
+                //     print("{}.push_back(({}[i]).local());", st_loc.varname,
+                //           st.varname);
+                // });
+
+                // pass creating local as morsel init
+                // print("{}& {} = {}.local();\n", vecType, st_loc.varname,
+                //       st.varname);
+                // print("int64_t& {} = {}.local();\n", c_loc.varname,
+                // c.varname);
+            },
+            [&]() {
+                print("{} {} = {{{}}};", groupTupleType, group_tuple.varname,
+                      formatVarnames(groupKeyIUs.v));
+                // provideIU(&hash, format("hashKey({})", group_tuple.varname));
+                print("{}.insert_tuple({});", hll_loc.varname,
+                      group_tuple.varname);
+                // // add to local
+                // print("{}.push_back({}({{{}}}, {{{}}}));\n", st_loc.varname,
+                //       entryType, formatVarnames(leftKeyIUs),
+                //       formatVarnames(leftPayloadIUs.v));
+                // // count element
+                // print("{}++;\n", c_loc.varname);
+            });
+
+        // print("unordered_map<{}, {}> {};\n", groupTupleType, resultTupleType,
+        //       ht.varname);
     }
 
     IU* getIU(const string& attName) {
