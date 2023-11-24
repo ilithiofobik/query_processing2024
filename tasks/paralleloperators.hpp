@@ -406,7 +406,7 @@ struct ParallelTopK : public ParallelOperator {
 
 // group by operator
 struct ParallelGroupBy : public ParallelOperator {
-    enum AggFunction { Sum, Count, Max, Avg };
+    enum AggFunction { Sum, Count, Max, AvgSum, AvgCnt };
 
     struct Aggregate {
         AggFunction aggFn;  // aggregate function
@@ -429,34 +429,36 @@ struct ParallelGroupBy : public ParallelOperator {
     // destructor
     ~ParallelGroupBy() {}
 
-    void addCount(const string& name) {
-        aggs.push_back({AggFunction::Count, nullptr, {name, Type::Integer}});
-    }
+    void addCount(const string& name) { addAsInt(AggFunction::Count, name); }
 
     void addSum(const string& name, IU* inputIU) {
-        aggs.push_back({AggFunction::Sum, inputIU, {name, inputIU->type}});
+        addAsType(AggFunction::Sum, name, inputIU);
     }
 
     void addMax(const string& name, IU* inputIU) {
-        aggs.push_back({AggFunction::Max, inputIU, {name, inputIU->type}});
+        addAsType(AggFunction::Max, name, inputIU);
     }
 
     void addAvg(const string& name, IU* inputIU) {
-        aggs.push_back({AggFunction::Avg, inputIU, {name, Type::Double}});
-        addSum("avg_sum", inputIU);
-        addCount("avg_cnt");
+        addAsType(AggFunction::AvgSum, name, inputIU);
+        addAsInt(AggFunction::AvgCnt, name);
     }
 
     vector<IU*> resultIUs() {
         vector<IU*> v;
-        for (auto& [fn, inputIU, resultIU] : aggs) v.push_back(&resultIU);
+        for (auto& [fn, inputIU, resultIU] : aggs) {
+            v.push_back(&resultIU);
+        }
         return v;
     }
 
     IUSet inputIUs() {
         IUSet v;
-        for (auto& [fn, inputIU, resultIU] : aggs)
-            if (inputIU) v.add(inputIU);
+        for (auto& [fn, inputIU, resultIU] : aggs) {
+            if (inputIU) {
+                v.add(inputIU);
+            }
+        }
         return v;
     }
 
@@ -472,6 +474,15 @@ struct ParallelGroupBy : public ParallelOperator {
         for (auto& [fn, inputIU, resultIU] : aggs)
             if (resultIU.name == attName) return &resultIU;
         throw;
+    }
+
+   private:
+    void addAsType(AggFunction af, const string& name, IU* inputIU) {
+        aggs.push_back({af, inputIU, {name, inputIU->type}});
+    }
+
+    void addAsInt(AggFunction af, const string& name) {
+        aggs.push_back({af, nullptr, {name, Type::Integer}});
     }
 };
 ////////////////////////////////////////////////////////////////////////////////
