@@ -26,23 +26,10 @@ struct HyperLogLog {
 
     ~HyperLogLog() {}
 
-    // void init() {
-    //     m_arr.reserve(m_i);
-    //     for (uint64_t i = 0; i < m_i; i++) {
-    //         m_arr.push_back(0);
-    //     }
-    // }
-
     void insert(uint64_t hash) {
         uint64_t j = hash >> (64 - b);
         uint64_t w = hash << b;
         m_arr[j] = std::max(m_arr[j], 1 + __builtin_clzl(w));
-    }
-
-    template <typename... Args>
-    void insert_tuple(const std::tuple<Args...> &args) {
-        uint64_t hash = hashKey(args);
-        insert(hash);
     }
 
     double estimate() {

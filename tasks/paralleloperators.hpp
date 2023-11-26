@@ -521,10 +521,10 @@ struct ParallelGroupBy : public ParallelOperator {
                 print("{} {} = {{{}, {}}};", firstResultType,
                       first_tuple.varname, group_tuple.varname,
                       input_tuple.varname);
-                print("{}.insert_tuple({});", hll_loc.varname,
-                      group_tuple.varname);
-                print("({}[0]).get().push_back({});", st_loc.varname,
-                      first_tuple.varname);
+                provideIU(&hash, format("hashKey({})", group_tuple.varname));
+                print("{}.insert({});", hll_loc.varname, hash.varname);
+                print("({}[({} >> 48)]).get().push_back({});", st_loc.varname,
+                      hash.varname, first_tuple.varname);
             });
 
         print("HyperLogLog {} = HyperLogLog();", hll_total.varname);
