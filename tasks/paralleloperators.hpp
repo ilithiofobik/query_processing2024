@@ -539,8 +539,8 @@ struct ParallelGroupBy : public ParallelOperator {
                 print("uint64_t {} = hashKey({});", hash.varname,
                       group_tuple.varname);
                 print("{}.insert({});", hll_loc.varname, hash.varname);
-                print("({}[{}]).get().push_back({});", st_loc.varname, (64 - b),
-                      first_tuple.varname);
+                print("({}[{} >> {}]).get().push_back({});", st_loc.varname,
+                      hash.varname, (64 - b), first_tuple.varname);
             });
 
         // summarize all hlls

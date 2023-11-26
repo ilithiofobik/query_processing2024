@@ -8,7 +8,7 @@
 using namespace qp;
 
 const uint64_t b = 6;
-const uint64_t m_i = 2 >> b;  // m=2^b
+const uint64_t m_i = 64;  // m=2^b
 const double m_f = double(m_i);
 const double alpha = 0.709;
 const double two_f = 2.0;
