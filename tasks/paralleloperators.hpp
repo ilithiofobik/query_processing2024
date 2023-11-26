@@ -413,7 +413,12 @@ struct ParallelGroupBy : public ParallelOperator {
     IU hll_loc{"hll_local", Type::Undefined};
     IU hll_total{"hll_total", Type::Undefined};
     IU group_tuple{"group_tuple", Type::Undefined};
+    IU result_tuple{"result_tuple", Type::Undefined};
+    IU input_tuple{"input_tuple", Type::Undefined};
+    IU first_tuple{"first_tuple", Type::Undefined};
     IU hash{"hash", Type::BigInt};
+    IU r{"r", Type::Undefined};
+    IU it{"it", Type::Undefined};
 
     enum AggFunction { Sum, Count, Max, AvgSum, AvgCnt };
 
@@ -461,11 +466,11 @@ struct ParallelGroupBy : public ParallelOperator {
         return v;
     }
 
-    IUSet inputIUs() {
-        IUSet v;
+    vector<IU*> inputIUs() {
+        vector<IU*> v;
         for (auto& [fn, inputIU, resultIU] : aggs) {
             if (inputIU) {
-                v.add(inputIU);
+                v.push_back(inputIU);
             }
         }
         return v;
@@ -473,14 +478,13 @@ struct ParallelGroupBy : public ParallelOperator {
 
     IUSet availableIUs() override { return groupKeyIUs | IUSet(resultIUs()); }
 
-    // TODO: Maybe adapt signature
     void produce(const IUSet& required, MorselInitFn morsel,
                  ConsumerFn consume) override {
         string groupTupleType = format("tuple<{}>", formatTypes(groupKeyIUs.v));
-        string resultTupleType = format("tuple<{}>", formatTypes(resultIUs()));
-        string allTuplesType =
-            format("tuple<{},{}>", groupTupleType, resultTupleType);
-        string vecType = format("vector<{}>", allTuplesType);
+        string inputTupleType = format("tuple<{}>", formatTypes(inputIUs()));
+        string firstResultType =
+            format("tuple<{},{}>", groupTupleType, inputTupleType);
+        string vecType = format("vector<{}>", firstResultType);
 
         print("tbb::enumerable_thread_specific<HyperLogLog> {};\n",
               hll.varname);
@@ -496,42 +500,49 @@ struct ParallelGroupBy : public ParallelOperator {
 
         // collect data in local storages
         input->produce(
-            groupKeyIUs | inputIUs(),
+            groupKeyIUs | IUSet(inputIUs()),
             [&]() {
                 print("HyperLogLog& {} = {}.local();\n", hll_loc.varname,
                       hll.varname);
                 // create local vector of storages
-                // print("vector<tbb::enumerable_thread_specific<{}> *> {};\n",
-                //       vecType, st_loc.varname);
-                // // print("vector<{} *> {};\n", vecType, st_loc.varname);
-                // print("{}.reserve(64);", st_loc.varname);
-                // genBlock(format("for(int i = 0; i < 64; i++)"), [&] {
-                //     print("{}.push_back(({}[i]).local());", st_loc.varname,
-                //           st.varname);
-                // });
-
-                // pass creating local as morsel init
-                // print("{}& {} = {}.local();\n", vecType, st_loc.varname,
-                //       st.varname);
-                // print("int64_t& {} = {}.local();\n", c_loc.varname,
-                // c.varname);
+                print("vector<reference_wrapper<{}>> {};\n", vecType,
+                      st_loc.varname);
+                print("{}.reserve(64);", st_loc.varname);
+                genBlock(format("for(int i = 0; i < 64; i++)"), [&] {
+                    print("{}.push_back(({}[i]).local());", st_loc.varname,
+                          st.varname);
+                });
             },
             [&]() {
                 print("{} {} = {{{}}};", groupTupleType, group_tuple.varname,
                       formatVarnames(groupKeyIUs.v));
-                // provideIU(&hash, format("hashKey({})", group_tuple.varname));
+                print("{} {} = {{{}}};", inputTupleType, input_tuple.varname,
+                      formatVarnames(inputIUs()));
+                print("{} {} = {{{}, {}}};", firstResultType,
+                      first_tuple.varname, group_tuple.varname,
+                      input_tuple.varname);
                 print("{}.insert_tuple({});", hll_loc.varname,
                       group_tuple.varname);
-                // // add to local
-                // print("{}.push_back({}({{{}}}, {{{}}}));\n", st_loc.varname,
-                //       entryType, formatVarnames(leftKeyIUs),
-                //       formatVarnames(leftPayloadIUs.v));
-                // // count element
-                // print("{}++;\n", c_loc.varname);
+                print("({}[0]).get().push_back({});", st_loc.varname,
+                      first_tuple.varname);
             });
 
-        // print("unordered_map<{}, {}> {};\n", groupTupleType, resultTupleType,
-        //       ht.varname);
+        print("HyperLogLog {} = HyperLogLog();", hll_total.varname);
+
+        string hllFor = format("tbb::parallel_for({}.range(), [&](auto {})",
+                               hll.varname, r.varname);
+
+        genBlock(hllFor, [&]() {
+            genBlock(format("for (HyperLogLog& {}: {})", it.varname, r.varname),
+                     [&]() {
+                         print("{}.merge({});", hll_total.varname, it.varname);
+                     });
+        });
+
+        // closing parallel for
+        print(");");
+
+        print("std::cerr << ({}.estimate());", hll_total.varname);
     }
 
     IU* getIU(const string& attName) {

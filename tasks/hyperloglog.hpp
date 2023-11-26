@@ -98,11 +98,8 @@ struct HyperLogLog {
     inline uint64_t hashKey(const std::tuple<Args...> &args) {
         return __fold_tuple(
             args, 0ul, [](const uint64_t acc, const auto &val) -> uint64_t {
-                // adapted from boost::hash_combine
                 return acc ^ (MurmurHash64A(val) + 0x517cc1b727220a95ul +
                               (acc << 6) + (acc >> 2));
-                // bad if keys are the same!
-                // return hashKey(val) ^ acc;
             });
     }
 };
