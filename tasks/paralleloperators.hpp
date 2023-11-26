@@ -458,6 +458,18 @@ struct ParallelGroupBy : public ParallelOperator {
         addAsInt(AggFunction::AvgCnt, name);
     }
 
+    uint64_t log_2(uint64_t x) {
+        uint64_t result = 0;
+        uint64_t y = 1;
+
+        while (y < x) {
+            y <<= 1;
+            result++;
+        }
+
+        return result;
+    }
+
     vector<IU*> resultIUs() {
         vector<IU*> v;
         for (auto& [fn, inputIU, resultIU] : aggs) {
@@ -480,6 +492,9 @@ struct ParallelGroupBy : public ParallelOperator {
 
     void produce(const IUSet& required, MorselInitFn morsel,
                  ConsumerFn consume) override {
+        uint64_t m = partitionCount;
+        uint64_t b = log_2(m);
+
         string groupTupleType = format("tuple<{}>", formatTypes(groupKeyIUs.v));
         string inputTupleType = format("tuple<{}>", formatTypes(inputIUs()));
         string firstResultType =
@@ -492,8 +507,8 @@ struct ParallelGroupBy : public ParallelOperator {
         // then each thread takes local for elements of this vector
         print("vector<tbb::enumerable_thread_specific<{}>> {};\n", vecType,
               st.varname);
-        print("{}.reserve(64);", st.varname);
-        genBlock(format("for(int i = 0; i < 64; i++)"), [&] {
+        print("{}.reserve({});", st.varname, m);
+        genBlock(format("for(int i = 0; i < {}; i++)", m), [&] {
             print("tbb::enumerable_thread_specific<{}> e;\n", vecType);
             print("{}.push_back(e);", st.varname);
         });
@@ -507,8 +522,8 @@ struct ParallelGroupBy : public ParallelOperator {
                 // create local vector of storages
                 print("vector<reference_wrapper<{}>> {};\n", vecType,
                       st_loc.varname);
-                print("{}.reserve(64);", st_loc.varname);
-                genBlock(format("for(int i = 0; i < 64; i++)"), [&] {
+                print("{}.reserve({});", st_loc.varname, m);
+                genBlock(format("for(int i = 0; i < {}; i++)", m), [&] {
                     print("{}.push_back(({}[i]).local());", st_loc.varname,
                           st.varname);
                 });
@@ -521,25 +536,23 @@ struct ParallelGroupBy : public ParallelOperator {
                 print("{} {} = {{{}, {}}};", firstResultType,
                       first_tuple.varname, group_tuple.varname,
                       input_tuple.varname);
-                provideIU(&hash, format("hashKey({})", group_tuple.varname));
+                print("uint64_t {} = hashKey({});", hash.varname,
+                      group_tuple.varname);
                 print("{}.insert({});", hll_loc.varname, hash.varname);
-                print("({}[({} >> 48)]).get().push_back({});", st_loc.varname,
-                      hash.varname, first_tuple.varname);
+                print("({}[{}]).get().push_back({});", st_loc.varname, (64 - b),
+                      first_tuple.varname);
             });
 
+        // summarize all hlls
         print("HyperLogLog {} = HyperLogLog();", hll_total.varname);
-
         string hllFor = format("tbb::parallel_for({}.range(), [&](auto {})",
                                hll.varname, r.varname);
-
         genBlock(hllFor, [&]() {
             genBlock(format("for (HyperLogLog& {}: {})", it.varname, r.varname),
                      [&]() {
                          print("{}.merge({});", hll_total.varname, it.varname);
                      });
         });
-
-        // closing parallel for
         print(");");
 
         print("std::cerr << ({}.estimate());", hll_total.varname);
