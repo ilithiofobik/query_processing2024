@@ -418,14 +418,13 @@ struct ParallelGroupBy : public ParallelOperator {
     IU group_tuple{"group_tuple", Type::Undefined};
     IU result_tuple{"result_tuple", Type::Undefined};
     IU input_tuple{"input_tuple", Type::Undefined};
-    IU first_tuple{"first_tuple", Type::Undefined};
+    IU required_tuple{"required_tuple", Type::Undefined};
     IU ts{"total_size", Type::BigInt};
     IU hash{"hash", Type::BigInt};
     IU r{"r", Type::Undefined};
     IU v{"v", Type::Undefined};
     IU x{"x", Type::Undefined};
     IU y{"y", Type::Undefined};
-    IU z{"z", Type::Undefined};
     IU it{"it", Type::Undefined};
 
     enum AggFunction { Sum, Count, Max, AvgSum, AvgCnt };
@@ -466,7 +465,7 @@ struct ParallelGroupBy : public ParallelOperator {
         addAsInt(AggFunction::AvgCnt, name);
     }
 
-    uint64_t log_2(uint64_t x) {
+    uint64_t log2(uint64_t x) {
         uint64_t result = 0;
         uint64_t y = 1;
 
@@ -486,13 +485,10 @@ struct ParallelGroupBy : public ParallelOperator {
         return v;
     }
 
-    vector<IU*> inputIUs() {
-        vector<IU*> v;
-        for (auto& [fn, inputIU, resultIU] : aggs) {
-            if (inputIU) {
-                v.push_back(inputIU);
-            }
-        }
+    IUSet inputIUs() {
+        IUSet v;
+        for (auto& [fn, inputIU, resultIU] : aggs)
+            if (inputIU) v.add(inputIU);
         return v;
     }
 
@@ -501,15 +497,17 @@ struct ParallelGroupBy : public ParallelOperator {
     void produce(const IUSet& required, MorselInitFn morsel,
                  ConsumerFn consume) override {
         uint64_t m = partitionCount;
-        uint64_t b = log_2(m);
+        uint64_t b = log2(m);
 
-        vector<IU*> inputIUsVec = inputIUs();
-        string groupTupleType = format("tuple<{}>", formatTypes(groupKeyIUs.v));
-        string inputTupleType = format("tuple<{}>", formatTypes(inputIUsVec));
+        IUSet locals = groupKeyIUs | inputIUs();
+
+        vector<IU*> groupIUsVec = groupKeyIUs.v;
+        vector<IU*> localsIUsVec = locals.v;
+
+        string groupTupleType = format("tuple<{}>", formatTypes(groupIUsVec));
+        string localsTupleType = format("tuple<{}>", formatTypes(localsIUsVec));
         string resultTupleType = format("tuple<{}>", formatTypes(resultIUs()));
-        string firstResultType =
-            format("tuple<{},{}>", groupTupleType, inputTupleType);
-        string vecType = format("vector<{}>", firstResultType);
+        string vecType = format("vector<{}>", localsTupleType);
 
         print("tbb::enumerable_thread_specific<HyperLogLog> {};\n",
               hll.varname);
@@ -541,16 +539,13 @@ struct ParallelGroupBy : public ParallelOperator {
             [&]() {
                 print("{} {} = {{{}}};", groupTupleType, group_tuple.varname,
                       formatVarnames(groupKeyIUs.v));
-                print("{} {} = {{{}}};", inputTupleType, input_tuple.varname,
-                      formatVarnames(inputIUs()));
-                print("{} {} = {{{}, {}}};", firstResultType,
-                      first_tuple.varname, group_tuple.varname,
-                      input_tuple.varname);
+                print("{} {} = {{{}}};", localsTupleType,
+                      required_tuple.varname, formatVarnames(localsIUsVec));
                 print("uint64_t {} = hashKey({});", hash.varname,
                       group_tuple.varname);
                 print("{}.insert({});", hll_loc.varname, hash.varname);
                 print("({}[{} >> {}]).get().push_back({});", st_loc.varname,
-                      hash.varname, (64 - b), first_tuple.varname);
+                      hash.varname, (64 - b), required_tuple.varname);
             });
 
         // summarize all hlls
@@ -591,19 +586,13 @@ struct ParallelGroupBy : public ParallelOperator {
                     "for (auto {0} = {1}.begin(); {0} != {1}.end(); {0}++)",
                     v.varname, currSt);
                 genBlock(partFor, [&] {
-                    string vecFor = format("for ({}& {}: *{})", firstResultType,
+                    string vecFor = format("for ({}& {}: *{})", localsTupleType,
                                            x.varname, v.varname);
                     genBlock(vecFor, [&] {
                         // produce the values
-                        for (uint64_t i = 0; i < groupKeyIUs.v.size(); i++) {
-                            string iuVal =
-                                format("get<{}>(get<0>({}))", i, x.varname);
-                            provideIU(groupKeyIUs.v[i], iuVal);
-                        }
-                        for (uint64_t i = 0; i < inputIUsVec.size(); i++) {
-                            string iuVal =
-                                format("get<{}>(get<1>({}))", i, x.varname);
-                            provideIU(inputIUsVec[i], iuVal);
+                        for (uint64_t i = 0; i < localsIUsVec.size(); i++) {
+                            string iuVal = format("get<{}>({})", i, x.varname);
+                            provideIU(localsIUsVec[i], iuVal);
                         }
 
                         // consume to aggregate
