@@ -607,64 +607,103 @@ struct ParallelGroupBy : public ParallelOperator {
                         }
 
                         // consume to aggregate
+                        print("auto {} = {}.find({{{}}});", y.varname, currHt,
+                              formatVarnames(groupKeyIUs.v));
+                        genBlock(
+                            format("if ({} == {}.end())", y.varname, currHt),
+                            [&]() {
+                                vector<string> initValues;
+                                for (auto& [fn, inputIU, resultIU] : aggs) {
+                                    switch (fn) {
+                                        case (AggFunction::Sum):
+                                        case (AggFunction::Max):
+                                        case (AggFunction::AvgSum): {
+                                            initValues.push_back(
+                                                inputIU->varname);
+                                            break;
+                                        }
+                                        case (AggFunction::Count):
+                                        case (AggFunction::AvgCnt): {
+                                            initValues.push_back("1");
+                                            break;
+                                        }
+                                    }
+                                }
+                                // insert new group
+                                print("{}.insert({{{{{}}}, {{{}}}}});\n",
+                                      currHt, formatVarnames(groupKeyIUs.v),
+                                      fmt::join(initValues, ","));
+                            });
+                        genBlock("else", [&]() {
+                            // update group
+                            unsigned i = 0;
+                            for (auto& [fn, inputIU, resultIU] : aggs) {
+                                switch (fn) {
+                                    case (AggFunction::Sum):
+                                    case (AggFunction::AvgSum): {
+                                        print("get<{}>({}->second) += {};\n", i,
+                                              y.varname, inputIU->varname);
+                                        break;
+                                    }
+                                    case (AggFunction::Count):
+                                    case (AggFunction::AvgCnt): {
+                                        print("get<{}>({}->second)++;\n", i,
+                                              y.varname);
+                                        break;
+                                    }
+                                    case (AggFunction::Max): {
+                                        print(
+                                            "get<{0}>({2}->second) = "
+                                            "max(get<{0}>({2}->second), {1});",
+                                            i, inputIU->varname, y.varname);
+                                        break;
+                                    }
+                                }
+                                i++;
+                            }
+                        });
                     });
                 });
-
-                // insert tuple into hash table
-                // print("auto it = {}[{}].find({{{}}});\n", ht_vec.varname,
-                //       formatVarnames(groupKeyIUs.v));
-                // genBlock(format("if (it == {}.end())", ht.varname), [&]() {
-                //     vector<string> initValues;
-                //     for (auto& [fn, inputIU, resultIU] : aggs) {
-                //         switch (fn) {
-                //             case (AggFunction::Sum):
-                //             case (AggFunction::Max):
-                //             case (AggFunction::AvgSum): {
-                //                 initValues.push_back(inputIU->varname);
-                //                 break;
-                //             }
-                //             case (AggFunction::Count):
-                //             case (AggFunction::AvgCnt): {
-                //                 initValues.push_back("1");
-                //                 break;
-                //             }
-                //         }
-                //     }
-                //     // insert new group
-                //     print("{}.insert({{{{{}}}, {{{}}}}});\n", ht.varname,
-                //           formatVarnames(groupKeyIUs.v),
-                //           fmt::join(initValues, ","));
-                // });
-                // genBlock("else", [&]() {
-                //     // update group
-                //     unsigned i = 0;
-                //     for (auto& [fn, inputIU, resultIU] : aggs) {
-                //         switch (fn) {
-                //             case (AggFunction::Sum):
-                //             case (AggFunction::AvgSum): {
-                //                 print("get<{}>(it->second) += {};\n", i,
-                //                       inputIU->varname);
-                //                 break;
-                //             }
-                //             case (AggFunction::Count):
-                //             case (AggFunction::AvgCnt): {
-                //                 print("get<{}>(it->second)++;\n", i);
-                //                 break;
-                //             }
-                //             case (AggFunction::Max): {
-                //                 print(
-                //                     "get<{0}>(it->second) = "
-                //                     "max(get<{0}>(it->second), {1});\n",
-                //                     i, inputIU->varname);
-                //                 break;
-                //             }
-                //         }
-                //         i++;
-                //     }
-                // });
             });
         });
         print(");");
+
+        // consume all
+        genBlock(format("for (auto& {}: {})", x.varname, ht_vec.varname), [&] {
+            genBlock(
+                format("for (auto& {} : {})", y.varname, x.varname), [&]() {
+                    for (unsigned i = 0; i < groupKeyIUs.size(); i++) {
+                        IU* iu = groupKeyIUs.v[i];
+                        if (required.contains(iu))
+                            provideIU(
+                                iu, format("get<{}>({}.first)", i, y.varname));
+                    }
+                    unsigned i = 0;
+                    for (auto& [fn, inputIU, resultIU] : aggs) {
+                        switch (fn) {
+                            case (AggFunction::Sum):
+                            case (AggFunction::Count):
+                            case (AggFunction::Max): {
+                                provideIU(
+                                    &resultIU,
+                                    format("get<{}>({}.second)", i, y.varname));
+                                break;
+                            }
+                            case (AggFunction::AvgSum): {
+                                provideIU(&resultIU,
+                                          format("get<{0}>({2}.second) "
+                                                 "/get<{1}>({2}.second) ",
+                                                 i, i + 1, y.varname));
+                                break;
+                            }
+                            case (AggFunction::AvgCnt):
+                                break;
+                        }
+                        i++;
+                    }
+                    consume();
+                });
+        });
     }
 
     IU* getIU(const string& attName) {
