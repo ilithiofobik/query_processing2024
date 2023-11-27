@@ -412,8 +412,9 @@ struct ParallelGroupBy : public ParallelOperator {
     IU hll{"hll", Type::Undefined};
     IU hll_loc{"hll_local", Type::Undefined};
     IU hll_total{"hll_total", Type::Undefined};
-    IU ht{"ht", Type::Undefined};
-    IU ht_local{"ht_local", Type::Undefined};
+    // IU ht{"ht", Type::Undefined};
+    // IU ht_local{"ht_local", Type::Undefined};
+    IU ht_vec{"ht_vec", Type::Undefined};
     IU group_tuple{"group_tuple", Type::Undefined};
     IU result_tuple{"result_tuple", Type::Undefined};
     IU input_tuple{"input_tuple", Type::Undefined};
@@ -564,8 +565,25 @@ struct ParallelGroupBy : public ParallelOperator {
                   format("{}.ht_size({})", hll_total.varname, partitionCount));
 
         // create all hashtables
-        print("tbb::enumerable_thread_specific<unordered_map<{},{}>> {};",
-              groupTupleType, resultTupleType, ht.varname);
+        print("vector<unordered_map<{},{}>> {}({});", groupTupleType,
+              resultTupleType, ht_vec.varname, partitionCount);
+
+        // aggregate in ht
+        string htFor = format(
+            "tbb::parallel_for(tbb::blocked_range<uint64_t>(0, {}), "
+            "[&](auto "
+            "{})",
+            partitionCount, r.varname);
+        genBlock(htFor, [&]() {
+            string rangeFor = format(
+                "for (uint64_t {0} = {1}.begin(); {0} < {1}.end(); {0}++)",
+                it.varname, r.varname);
+            genBlock(rangeFor, [&]() {
+                print("{}[{}].reserve({});\n", ht_vec.varname, it.varname,
+                      ts.varname);
+            });
+        });
+        print(");");
 
         // print("{}.reserve({});", st.varname, m);
         // genBlock(format("for(int i = 0; i < {}; i++)", m), [&] {
