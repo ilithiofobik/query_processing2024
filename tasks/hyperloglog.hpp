@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <cstdint>
 #include <vector>
 
@@ -60,9 +61,7 @@ struct HyperLogLog {
     }
 
     uint64_t ht_size(uint64_t partCount) {
-        uint64_t estimated = (uint64_t)(estimate() / partCount);
-        uint64_t two = 2;
-        return std::max(two, estimated);
+        return (uint64_t)std::ceil(estimate() / partCount);
     }
 
     void merge(HyperLogLog &other) {
