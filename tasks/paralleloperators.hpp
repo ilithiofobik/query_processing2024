@@ -422,6 +422,10 @@ struct ParallelGroupBy : public ParallelOperator {
     IU ts{"total_size", Type::BigInt};
     IU hash{"hash", Type::BigInt};
     IU r{"r", Type::Undefined};
+    IU v{"v", Type::Undefined};
+    IU x{"x", Type::Undefined};
+    IU y{"y", Type::Undefined};
+    IU z{"z", Type::Undefined};
     IU it{"it", Type::Undefined};
 
     enum AggFunction { Sum, Count, Max, AvgSum, AvgCnt };
@@ -499,8 +503,9 @@ struct ParallelGroupBy : public ParallelOperator {
         uint64_t m = partitionCount;
         uint64_t b = log_2(m);
 
+        vector<IU*> inputIUsVec = inputIUs();
         string groupTupleType = format("tuple<{}>", formatTypes(groupKeyIUs.v));
-        string inputTupleType = format("tuple<{}>", formatTypes(inputIUs()));
+        string inputTupleType = format("tuple<{}>", formatTypes(inputIUsVec));
         string resultTupleType = format("tuple<{}>", formatTypes(resultIUs()));
         string firstResultType =
             format("tuple<{},{}>", groupTupleType, inputTupleType);
@@ -579,19 +584,87 @@ struct ParallelGroupBy : public ParallelOperator {
                 "for (uint64_t {0} = {1}.begin(); {0} < {1}.end(); {0}++)",
                 it.varname, r.varname);
             genBlock(rangeFor, [&]() {
-                print("{}[{}].reserve({});\n", ht_vec.varname, it.varname,
-                      ts.varname);
+                string currHt = format("{}[{}]", ht_vec.varname, it.varname);
+                string currSt = format("{}[{}]", st.varname, it.varname);
+                print("{}.reserve({});\n", currHt, ts.varname);
+                string partFor = format(
+                    "for (auto {0} = {1}.begin(); {0} != {1}.end(); {0}++)",
+                    v.varname, currSt);
+                genBlock(partFor, [&] {
+                    string vecFor = format("for ({}& {}: *{})", firstResultType,
+                                           x.varname, v.varname);
+                    genBlock(vecFor, [&] {
+                        // produce the values
+                        for (uint64_t i = 0; i < groupKeyIUs.v.size(); i++) {
+                            string iuVal =
+                                format("get<{}>(get<0>({}))", i, x.varname);
+                            provideIU(groupKeyIUs.v[i], iuVal);
+                        }
+                        for (uint64_t i = 0; i < inputIUsVec.size(); i++) {
+                            string iuVal =
+                                format("get<{}>(get<1>({}))", i, x.varname);
+                            provideIU(inputIUsVec[i], iuVal);
+                        }
+
+                        // consume to aggregate
+                    });
+                });
+
+                // insert tuple into hash table
+                // print("auto it = {}[{}].find({{{}}});\n", ht_vec.varname,
+                //       formatVarnames(groupKeyIUs.v));
+                // genBlock(format("if (it == {}.end())", ht.varname), [&]() {
+                //     vector<string> initValues;
+                //     for (auto& [fn, inputIU, resultIU] : aggs) {
+                //         switch (fn) {
+                //             case (AggFunction::Sum):
+                //             case (AggFunction::Max):
+                //             case (AggFunction::AvgSum): {
+                //                 initValues.push_back(inputIU->varname);
+                //                 break;
+                //             }
+                //             case (AggFunction::Count):
+                //             case (AggFunction::AvgCnt): {
+                //                 initValues.push_back("1");
+                //                 break;
+                //             }
+                //         }
+                //     }
+                //     // insert new group
+                //     print("{}.insert({{{{{}}}, {{{}}}}});\n", ht.varname,
+                //           formatVarnames(groupKeyIUs.v),
+                //           fmt::join(initValues, ","));
+                // });
+                // genBlock("else", [&]() {
+                //     // update group
+                //     unsigned i = 0;
+                //     for (auto& [fn, inputIU, resultIU] : aggs) {
+                //         switch (fn) {
+                //             case (AggFunction::Sum):
+                //             case (AggFunction::AvgSum): {
+                //                 print("get<{}>(it->second) += {};\n", i,
+                //                       inputIU->varname);
+                //                 break;
+                //             }
+                //             case (AggFunction::Count):
+                //             case (AggFunction::AvgCnt): {
+                //                 print("get<{}>(it->second)++;\n", i);
+                //                 break;
+                //             }
+                //             case (AggFunction::Max): {
+                //                 print(
+                //                     "get<{0}>(it->second) = "
+                //                     "max(get<{0}>(it->second), {1});\n",
+                //                     i, inputIU->varname);
+                //                 break;
+                //             }
+                //         }
+                //         i++;
+                //     }
+                // });
             });
         });
         print(");");
-
-        // print("{}.reserve({});", st.varname, m);
-        // genBlock(format("for(int i = 0; i < {}; i++)", m), [&] {
-        //     print("tbb::enumerable_thread_specific<{}> e;\n", vecType);
-        //     print("{}.push_back(e);", st.varname);
-        // });
-
-        print("std::cerr << ({}.estimate());", hll_total.varname);
     }
 
     IU* getIU(const string& attName) {
