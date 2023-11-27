@@ -64,9 +64,10 @@ struct HyperLogLog {
         return (uint64_t)std::ceil(estimate() / partCount);
     }
 
-    void merge(HyperLogLog &other) {
+    HyperLogLog operator+(HyperLogLog &other) {
         for (uint64_t i = 0; i < m_i; i++) {
             m_arr[i] = std::max(m_arr[i], other.m_arr[i]);
         }
+        return *this;
     }
 };

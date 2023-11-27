@@ -549,16 +549,10 @@ struct ParallelGroupBy : public ParallelOperator {
             });
 
         // summarize all hlls
-        print("HyperLogLog {} = HyperLogLog();", hll_total.varname);
-        string hllFor = format("tbb::parallel_for({}.range(), [&](auto {})",
-                               hll.varname, r.varname);
-        genBlock(hllFor, [&]() {
-            genBlock(format("for (HyperLogLog& {}: {})", it.varname, r.varname),
-                     [&]() {
-                         print("{}.merge({});", hll_total.varname, it.varname);
-                     });
-        });
-        print(");");
+        print(
+            "HyperLogLog {1} = accumulate({0}.begin(), {0}.end(), "
+            "HyperLogLog());",
+            hll.varname, hll_total.varname);
 
         // estimate the size of hashtables
         provideIU(&ts,
