@@ -412,10 +412,13 @@ struct ParallelGroupBy : public ParallelOperator {
     IU hll{"hll", Type::Undefined};
     IU hll_loc{"hll_local", Type::Undefined};
     IU hll_total{"hll_total", Type::Undefined};
+    IU ht{"ht", Type::Undefined};
+    IU ht_local{"ht_local", Type::Undefined};
     IU group_tuple{"group_tuple", Type::Undefined};
     IU result_tuple{"result_tuple", Type::Undefined};
     IU input_tuple{"input_tuple", Type::Undefined};
     IU first_tuple{"first_tuple", Type::Undefined};
+    IU ts{"total_size", Type::BigInt};
     IU hash{"hash", Type::BigInt};
     IU r{"r", Type::Undefined};
     IU it{"it", Type::Undefined};
@@ -497,6 +500,7 @@ struct ParallelGroupBy : public ParallelOperator {
 
         string groupTupleType = format("tuple<{}>", formatTypes(groupKeyIUs.v));
         string inputTupleType = format("tuple<{}>", formatTypes(inputIUs()));
+        string resultTupleType = format("tuple<{}>", formatTypes(resultIUs()));
         string firstResultType =
             format("tuple<{},{}>", groupTupleType, inputTupleType);
         string vecType = format("vector<{}>", firstResultType);
@@ -554,6 +558,20 @@ struct ParallelGroupBy : public ParallelOperator {
                      });
         });
         print(");");
+
+        // estimate the size of hashtables
+        provideIU(&ts,
+                  format("{}.ht_size({})", hll_total.varname, partitionCount));
+
+        // create all hashtables
+        print("tbb::enumerable_thread_specific<unordered_map<{},{}>> {};",
+              groupTupleType, resultTupleType, ht.varname);
+
+        // print("{}.reserve({});", st.varname, m);
+        // genBlock(format("for(int i = 0; i < {}; i++)", m), [&] {
+        //     print("tbb::enumerable_thread_specific<{}> e;\n", vecType);
+        //     print("{}.push_back(e);", st.varname);
+        // });
 
         print("std::cerr << ({}.estimate());", hll_total.varname);
     }
