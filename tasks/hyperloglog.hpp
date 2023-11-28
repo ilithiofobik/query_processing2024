@@ -15,14 +15,9 @@ const double alpha = 0.709;
 const double two_pow32 = pow(2.0, 32.0);
 
 struct HyperLogLog {
-    std::vector<int> m_arr;
+    int m_arr[64];  // m_i = 64
 
-    HyperLogLog() {
-        m_arr.reserve(m_i);
-        for (uint64_t i = 0; i < m_i; i++) {
-            m_arr.push_back(0);
-        }
-    }
+    HyperLogLog() { memset(m_arr, 0, sizeof(m_arr)); }
 
     ~HyperLogLog() {}
 
@@ -64,7 +59,7 @@ struct HyperLogLog {
         return (uint64_t)std::ceil(estimate() / partCount);
     }
 
-    HyperLogLog operator+(HyperLogLog &other) {
+    HyperLogLog operator+(HyperLogLog const &other) {
         for (uint64_t i = 0; i < m_i; i++) {
             m_arr[i] = std::max(m_arr[i], other.m_arr[i]);
         }
