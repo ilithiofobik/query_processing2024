@@ -15,7 +15,7 @@
 #include "p2c/tpch.hpp"
 #include "p2c/types.hpp"
 #include "paralleloperators.hpp"
-#include "tree_of_losers.hpp"
+#include "tournament_tree.hpp"
 
 using namespace std;
 using namespace fmt;
