@@ -26,6 +26,7 @@ int main() {
         // my exepriments with tournament tree
         // to be moved to different file
         RandomInputStream ris(0, 1000, 10000);
+        auto tree = TreeOfLosers<tuple<uint32_t, uint32_t>>(ris);
 
         auto l = make_unique<ParallelScan>("lineitem");
         IU* lq = l->getIU("l_quantity");

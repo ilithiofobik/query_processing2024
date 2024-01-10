@@ -70,7 +70,7 @@ template <typename T>
 class InputStream {
    public:
     InputStream() {}
-    virtual T getNext();
+    virtual T getNext() { return {}; };
 };
 
 class RandomInputStream : public InputStream<std::tuple<uint32_t, uint32_t>> {
@@ -106,6 +106,7 @@ class TreeOfLosers<tuple<Args...>> {
     uint32_t mostRecentWinner;
     InputStream<tuple<Args...>> inputStream;
 
+   public:
     TreeOfLosers(InputStream<tuple<Args...>> inputStream)
         : inputStream(inputStream) {}
 
