@@ -15,38 +15,7 @@ typedef uint32_t vc_t;
 typedef std::tuple<o_t, vc_t> ovc_t;
 
 template <class T>
-struct ovc;
-
-template <class T>
 class TreeOfLosers;
-
-template <typename... Args>
-struct ovc<tuple<Args...>> {
-    inline ovc_t get_ovc(const tuple<Args...> &args1,
-                         const tuple<Args...> &args2) const {
-        // TODO: is this needed to be wrapped?
-        return calc_ovc(args1, args2);
-    }
-
-   private:
-    template <unsigned I = 0, typename... Tuple>
-    constexpr inline static ovc_t calc_ovc(const tuple<Tuple...> &tuple1,
-                                           const tuple<Tuple...> &tuple2) {
-        if constexpr (I == sizeof...(Args)) {
-            throw std::runtime_error("Tuples are equal");
-        } else {
-            auto val1 = get<I>(tuple1);
-            auto val2 = get<I>(tuple2);
-            if (val1 != val2 || I == sizeof...(Args) - 1) {
-                vc_t v = (vc_t)get<I>(tuple1);
-                vc_t vc = std::numeric_limits<vc_t>::max() - v;
-                return {I + 1, vc};
-            } else {
-                return calc_ovc<I + 1, Tuple...>(tuple1, tuple2);
-            }
-        }
-    }
-};
 
 // TODO: change to template on type T
 template <typename T>
@@ -61,8 +30,7 @@ struct Node {
     Node() {}
 };
 
-// TODO: change to class
-// support random input and reading from file
+// TODO: support random input and reading from file
 template <typename T>
 class InputStream {
    public:
@@ -103,7 +71,6 @@ class TreeOfLosers<tuple<Args...>> {
     std::optional<Node<tuple<Args...>>> nodes[MAX_NODES];
     uint32_t mostRecentWinner;
     InputStream<tuple<Args...>> inputStream;
-    ovc<tuple<Args...>> ovcCalculator;
 
    public:
     TreeOfLosers(InputStream<tuple<Args...>> inputStream)
@@ -119,8 +86,7 @@ class TreeOfLosers<tuple<Args...>> {
             auto newLeaf = Node<tuple<Args...>>();
             newLeaf.winnerKey = inputStream.getNext();
             newLeaf.winner = i;
-            newLeaf.nodeOvc =
-                ovcCalculator.get_ovc(newLeaf.winnerKey, minimalKey());
+            newLeaf.nodeOvc = calc_ovc(newLeaf.winnerKey, minimalKey());
 
             nodes[i] = std::make_optional(newLeaf);
         }
@@ -161,8 +127,7 @@ class TreeOfLosers<tuple<Args...>> {
                         newInternal.winner = left.winner;
                         newInternal.loserKey = right.winnerKey;
                         newInternal.loser = right.winner;
-                        newInternal.nodeOvc =
-                            ovcCalculator.get_ovc(right.key, left.key);
+                        newInternal.nodeOvc = calc_ovc(right.key, left.key);
                     }
                     // case 3.2
                     else {
@@ -170,8 +135,7 @@ class TreeOfLosers<tuple<Args...>> {
                         newInternal.winner = right.winner;
                         newInternal.loserKey = left.winnerKey;
                         newInternal.loser = left.winner;
-                        newInternal.nodeOvc =
-                            ovcCalculator.get_ovc(left.key, right.key);
+                        newInternal.nodeOvc = calc_ovc(left.key, right.key);
                     }
                 }
 
@@ -181,6 +145,7 @@ class TreeOfLosers<tuple<Args...>> {
     }
 
    private:
+    // tree traversing
     std::optional<uint32_t> getLeftChild(uint32_t idx) {
         uint32_t leftIdx = idx * 2;
         if (leftIdx < MAX_NODES && nodes[leftIdx].has_value()) {
@@ -210,6 +175,25 @@ class TreeOfLosers<tuple<Args...>> {
             return std::make_optional(parentIdx);
         } else {
             return {};
+        }
+    }
+
+    // ovc calculations
+    template <unsigned I = 0, typename... Tuple>
+    constexpr inline static ovc_t calc_ovc(const tuple<Tuple...> &tuple1,
+                                           const tuple<Tuple...> &tuple2) {
+        if constexpr (I == sizeof...(Args)) {
+            throw std::runtime_error("Tuples are equal");
+        } else {
+            auto val1 = get<I>(tuple1);
+            auto val2 = get<I>(tuple2);
+            if (val1 != val2 || I == sizeof...(Args) - 1) {
+                vc_t v = (vc_t)get<I>(tuple1);
+                vc_t vc = std::numeric_limits<vc_t>::max() - v;
+                return {I + 1, vc};
+            } else {
+                return calc_ovc<I + 1, Tuple...>(tuple1, tuple2);
+            }
         }
     }
 };
