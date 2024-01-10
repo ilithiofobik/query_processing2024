@@ -7,6 +7,9 @@
 
 // for now defining node only for uint32_t
 // to be extended for more types
+// for now, simple conversion to uint32_t is used
+
+#define MAX_NODES 1024  // TODO: magic number, should be changable?
 
 typedef uint32_t o_t;
 typedef uint32_t vc_t;
@@ -17,69 +20,46 @@ struct ovc;
 
 template <typename... Args>
 struct ovc<tuple<Args...>> {
-    inline ovc_t calc_ovc(const tuple<Args...> &args1,
-                          const tuple<Args...> &args2) const {
-        o_t o = calc_offset(args1, args2);
-        vc_t vc = 0;  // TODO: calculate vc
-        return {o, vc};
+    inline ovc_t get_ovc(const tuple<Args...> &args1,
+                         const tuple<Args...> &args2) const {
+        // TODO: is this needed to be wrapped?
+        return calc_ovc(args1, args2);
     }
 
    private:
     template <unsigned I = 0, typename... Tuple>
-    constexpr inline static o_t calc_offset(const tuple<Tuple...> &tuple1,
-                                            const tuple<Tuple...> &tuple2) {
+    constexpr inline static ovc_t calc_ovc(const tuple<Tuple...> &tuple1,
+                                           const tuple<Tuple...> &tuple2) {
         if constexpr (I == sizeof...(Args)) {
-            return I;  // this is returned when tuples are equal
-        } else if (get<I>(tuple1) != get<I>(tuple2)) {
-            return I + 1;
+            throw std::runtime_error("Tuples are equal");
         } else {
-            return calc_offset<I + 1, Tuple...>(tuple1, tuple2);
+            auto val1 = get<I>(tuple1);
+            auto val2 = get<I>(tuple2);
+            if (val1 != val2) {
+                vc_t v = (vc_t)get<I>(tuple1);
+                vc_t vc = std::numeric_limits<vc_t>::max() - v;
+                return {I + 1, vc};
+            } else {
+                return calc_ovc<I + 1, Tuple...>(tuple1, tuple2);
+            }
         }
     }
 };
 
-// template <typename T>
-// uint32_t lcp(T a, T b) {
-//     if (a < b) {
-//         return 1;
-//     } else {
-//         return 2;
-//     }
-// }
-
-// template <typename T>
-// uint32_t ovc(T a, T b) {
-//     if (a < b) {
-//         return 1;
-//     } else {
-//         return 2;
-//     }
-// }
-
-// class Struct {
-//    public:
-//     int a;
-//     int b;
-//     Struct(int a, int b) : a(a), b(b) {}
-//     bool operator==(const Struct &other) const {
-//         return a == other.a && b == other.b;
-//     }
-// };
-
-// // TODO: change to template on type T
-// struct Node {
-//     bool isNull;  // TODO: change to optional
-//     uint32_t winner;
-//     uint32_t loser;
-//     std::tuple<uint32_t, uint32_t> key;
-//     std::tuple<uint32_t, uint32_t> winnerKey;
-//     std::tuple<uint32_t, uint32_t> loserKey;
-//     std::tuple<uint32_t, uint32_t> ovc;
-//     uint32_t index;
-//     uint32_t parent() { return index / 2; }
-//     uint32_t leftChild() { return index * 2; }
-//     uint32_t rightChild() { return index * 2 + 1; }
-// };
+// TODO: change to template on type T
+struct Node {
+    bool isNull;  // TODO: change to optional
+    uint32_t winner;
+    uint32_t loser;
+    std::tuple<uint32_t, uint32_t> key;
+    std::tuple<uint32_t, uint32_t> winnerKey;
+    std::tuple<uint32_t, uint32_t> loserKey;
+    std::tuple<uint32_t, uint32_t> ovc;
+    uint32_t index;
+    uint32_t parent() { return index / 2; }
+    uint32_t leftChild() { return index * 2; }
+    uint32_t rightChild() { return index * 2 + 1; }
+};
 
 // // Assumption: a and b are not equal
 // std::tuple<uint32_t, uint32_t> ovc(std::tuple<uint32_t, uint32_t> a,
