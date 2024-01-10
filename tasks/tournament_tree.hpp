@@ -1,4 +1,5 @@
 #include <cstdlib>
+#include <optional>
 #include <tuple>
 #include <unordered_map>
 
@@ -9,8 +10,6 @@
 // to be extended for more types
 // for now, simple conversion to uint32_t is used
 
-#define MAX_NODES 1024  // TODO: magic number, should be changable?
-
 typedef uint32_t o_t;
 typedef uint32_t vc_t;
 typedef std::tuple<o_t, vc_t> ovc_t;
@@ -19,7 +18,7 @@ template <class T>
 struct ovc;
 
 template <class T>
-class tol;
+class TreeOfLosers;
 
 template <typename... Args>
 struct ovc<tuple<Args...>> {
@@ -76,9 +75,8 @@ class InputStream {
 
 class RandomInputStream : public InputStream<std::tuple<uint32_t, uint32_t>> {
    public:
-    RandomInputStream(uint32_t min, uint32_t max, uint32_t counter,
-                      uint32_t size)
-        : min_(min), max_(max), counter_(counter), size_(size) {
+    RandomInputStream(uint32_t min, uint32_t max, uint32_t size)
+        : min_(min), max_(max), counter_(0), size_(size) {
         srand(time(NULL));
     }
 
@@ -98,26 +96,30 @@ class RandomInputStream : public InputStream<std::tuple<uint32_t, uint32_t>> {
     uint32_t size_;
 };
 
-// simulating stream
-// TODO: return infinity at the end
-// std::tuple<uint32_t, uint32_t>
-// getNext() {
-//     return std::make_tuple(rand() % 1000, rand() % 1000);
-// }
-
-// move to output
-void appendToRun(std::tuple<uint32_t, uint32_t>) {}
-
 std::tuple<uint32_t, uint32_t> minimalKey() { return std::make_tuple(0, 0); }
 
+#define MAX_NODES 1024  // TODO: magic number, should be changable?
+
 template <typename... Args>
-class tol<tuple<Args...>> {
-    Node<tuple<Args...>> nodes[1024];
+class TreeOfLosers<tuple<Args...>> {
+    std::optional<Node<tuple<Args...>>> nodes[MAX_NODES];
     uint32_t mostRecentWinner;
     InputStream<tuple<Args...>> inputStream;
 
+    TreeOfLosers(InputStream<tuple<Args...>> inputStream)
+        : inputStream(inputStream) {}
+
+    void initialize() {
+        for (int i = 0; i < 1024; i++) {
+            nodes[i].winnerKey = inputStream.getNext();
+            nodes[i].winner = i;
+            nodes[i].ovc = ovc(nodes[i].winnerKey, minimalKey());
+            nodes[i].isNull = false;
+        }
+    }
+
     // initialization = step 1
-    tol() {
+    TreeOfLosers() {
         inputStream = {0, 10000};
 
         for (int i = 0; i < 1024; i++) {

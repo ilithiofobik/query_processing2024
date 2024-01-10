@@ -23,6 +23,10 @@ using namespace p2c;
 
 int main() {
     {
+        // my exepriments with tournament tree
+        // to be moved to different file
+        RandomInputStream ris(0, 1000, 10000);
+
         auto l = make_unique<ParallelScan>("lineitem");
         IU* lq = l->getIU("l_quantity");
         IU* lp = l->getIU("l_extendedprice");
