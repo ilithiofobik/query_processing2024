@@ -18,6 +18,9 @@ typedef std::tuple<o_t, vc_t> ovc_t;
 template <class T>
 struct ovc;
 
+template <class T>
+class tol;
+
 template <typename... Args>
 struct ovc<tuple<Args...>> {
     inline ovc_t get_ovc(const tuple<Args...> &args1,
@@ -47,135 +50,140 @@ struct ovc<tuple<Args...>> {
 };
 
 // TODO: change to template on type T
+template <typename T>
 struct Node {
     bool isNull;  // TODO: change to optional
     uint32_t winner;
     uint32_t loser;
-    std::tuple<uint32_t, uint32_t> key;
-    std::tuple<uint32_t, uint32_t> winnerKey;
-    std::tuple<uint32_t, uint32_t> loserKey;
-    std::tuple<uint32_t, uint32_t> ovc;
+    T key;
+    T winnerKey;
+    T loserKey;
+    ovc_t nodeOvc;
     uint32_t index;
     uint32_t parent() { return index / 2; }
     uint32_t leftChild() { return index * 2; }
     uint32_t rightChild() { return index * 2 + 1; }
 };
 
-// // Assumption: a and b are not equal
-// std::tuple<uint32_t, uint32_t> ovc(std::tuple<uint32_t, uint32_t> a,
-//                                    std::tuple<uint32_t, uint32_t> b) {
-//     if (get<0>(a) != get<0>(b)) {
-//         return {1, 1000 - get<0>(b)};
-//     } else {
-//         return {2, 1000 - get<1>(b)};
-//     }
+// TODO: change to class
+// support random input and reading from file
+template <typename T>
+class InputStream {
+   public:
+    InputStream() {}
+    virtual T getNext();
+};
+
+class RandomInputStream : public InputStream<std::tuple<uint32_t, uint32_t>> {
+   public:
+    RandomInputStream(uint32_t min, uint32_t max, uint32_t counter,
+                      uint32_t size)
+        : min_(min), max_(max), counter_(counter), size_(size) {
+        srand(time(NULL));
+    }
+
+    std::tuple<uint32_t, uint32_t> getNext() {
+        if (counter_ < size_) {
+            counter_++;
+            return std::make_tuple(rand() % max_ + min_, rand() % max_ + min_);
+        } else {
+            return std::make_tuple(max_, max_);  // return infinity
+        }
+    }
+
+   private:
+    uint32_t min_;
+    uint32_t max_;
+    uint32_t counter_;
+    uint32_t size_;
+};
+
+// simulating stream
+// TODO: return infinity at the end
+// std::tuple<uint32_t, uint32_t>
+// getNext() {
+//     return std::make_tuple(rand() % 1000, rand() % 1000);
 // }
 
-// // TODO: change to class
-// // support random input and reading from file
-// struct InputStream {
-//     int counter = 0;
-//     int inputSize = 10000;
+// move to output
+void appendToRun(std::tuple<uint32_t, uint32_t>) {}
 
-//     std::tuple<uint32_t, uint32_t> getNext() {
-//         counter++;
-//         if (counter < inputSize) {
-//             return std::make_tuple(rand() % 1000, rand() % 1000);
-//         } else {
-//             return std::make_tuple(1000, 1000);  // infinity
-//         }
-//     }
-// };
+std::tuple<uint32_t, uint32_t> minimalKey() { return std::make_tuple(0, 0); }
 
-// // simulating stream
-// // TODO: return infinity at the end
-// // std::tuple<uint32_t, uint32_t>
-// // getNext() {
-// //     return std::make_tuple(rand() % 1000, rand() % 1000);
-// // }
+template <typename... Args>
+class tol<tuple<Args...>> {
+    Node<tuple<Args...>> nodes[1024];
+    uint32_t mostRecentWinner;
+    InputStream<tuple<Args...>> inputStream;
 
-// // move to output
-// void appendToRun(std::tuple<uint32_t, uint32_t>) {}
+    // initialization = step 1
+    tol() {
+        inputStream = {0, 10000};
 
-// std::tuple<uint32_t, uint32_t> minimalKey() { return std::make_tuple(0, 0); }
+        for (int i = 0; i < 1024; i++) {
+            nodes[i].winnerKey = inputStream.getNext();
+            nodes[i].winner = i;
+            nodes[i].ovc = ovc(nodes[i].winnerKey, minimalKey());
+            nodes[i].isNull = false;
+        }
 
-// // Current assumptions
-// // - 1024 nodes
-// // node values from 0 to 999
-// struct TreeOfLosers {
-//     Node nodes[1024];
-//     uint32_t mostRecentWinner;
-//     InputStream inputStream;
+        for (int i = 1023; i >= 0; i--) {
+            uint32_t leftIdx = nodes[i].leftChild();
+            uint32_t rightIdx = nodes[i].rightChild();
+            if (rightIdx < 1024) {
+                if (!((nodes[leftIdx]).isNull) && !((nodes[rightIdx]).isNull)) {
+                    auto left = (nodes[leftIdx]);
+                    auto right = (nodes[rightIdx]);
 
-//     // initialization = step 1
-//     TreeOfLosers() {
-//         inputStream = {0, 10000};
+                    // case 1
+                    if (left.nodeOvc < right.nodeOvc) {
+                        nodes[i].winnerKey = right.winnerKey;
+                        nodes[i].winner = right.winner;
+                        nodes[i].loserKey = left.winnerKey;
+                        nodes[i].loser = left.winner;
+                        nodes[i].nodeOvc = left.nodeOvc;
+                    }
 
-//         for (int i = 0; i < 1024; i++) {
-//             nodes[i].winnerKey = inputStream.getNext();
-//             nodes[i].winner = i;
-//             nodes[i].ovc = ovc(nodes[i].winnerKey, minimalKey());
-//             nodes[i].isNull = false;
-//         }
+                    // case 2
+                    if (left.nodeOvc > right.nodeOvc) {
+                        nodes[i].winnerKey = left.winnerKey;
+                        nodes[i].winner = left.winner;
+                        nodes[i].loserKey = right.winnerKey;
+                        nodes[i].loser = right.winner;
+                        nodes[i].nodeOvc = right.nodeOvc;
+                    }
 
-//         for (int i = 1023; i >= 0; i--) {
-//             uint32_t leftIdx = nodes[i].leftChild();
-//             uint32_t rightIdx = nodes[i].rightChild();
-//             if (rightIdx < 1024) {
-//                 if (!((nodes[leftIdx]).isNull) &&
-//                 !((nodes[rightIdx]).isNull)) {
-//                     Node left = (nodes[leftIdx]);
-//                     Node right = (nodes[rightIdx]);
+                    // case 3
+                    if (left.ovc == right.ovc) {
+                        // case 3.1
+                        if (left.winner < right.winner) {
+                            nodes[i].winnerKey = left.winnerKey;
+                            nodes[i].winner = left.winner;
+                            nodes[i].loserKey = right.winnerKey;
+                            nodes[i].loser = right.winner;
+                            nodes[i].ovc = ovc(right.key, left.key);
+                        }
+                        // case 3.2
+                        else {
+                            nodes[i].winnerKey = right.winnerKey;
+                            nodes[i].winner = right.winner;
+                            nodes[i].loserKey = left.winnerKey;
+                            nodes[i].loser = left.winner;
+                            nodes[i].ovc = ovc(left.key, right.key);
+                        }
+                    }
+                }
+                appendToRun(nodes[0].winnerKey);
+                mostRecentWinner = nodes[0].winner;
+            }
+        }
+    }
 
-//                     // case 1
-//                     if (left.ovc < right.ovc) {
-//                         nodes[i].winnerKey = right.winnerKey;
-//                         nodes[i].winner = right.winner;
-//                         nodes[i].loserKey = left.winnerKey;
-//                         nodes[i].loser = left.winner;
-//                         nodes[i].ovc = left.ovc;
-//                     }
+    // step 2 = run formation
+    // step 3 = tree flush
+    // void formRun() {
+    //     do {
 
-//                     // case 2
-//                     if (left.ovc > right.ovc) {
-//                         nodes[i].winnerKey = left.winnerKey;
-//                         nodes[i].winner = left.winner;
-//                         nodes[i].loserKey = right.winnerKey;
-//                         nodes[i].loser = right.winner;
-//                         nodes[i].ovc = right.ovc;
-//                     }
-
-//                     // case 3
-//                     if (left.ovc == right.ovc) {
-//                         // case 3.1
-//                         if (left.winner < right.winner) {
-//                             nodes[i].winnerKey = left.winnerKey;
-//                             nodes[i].winner = left.winner;
-//                             nodes[i].loserKey = right.winnerKey;
-//                             nodes[i].loser = right.winner;
-//                             nodes[i].ovc = ovc(right.key, left.key);
-//                         }
-//                         // case 3.2
-//                         else {
-//                             nodes[i].winnerKey = right.winnerKey;
-//                             nodes[i].winner = right.winner;
-//                             nodes[i].loserKey = left.winnerKey;
-//                             nodes[i].loser = left.winner;
-//                             nodes[i].ovc = ovc(left.key, right.key);
-//                         }
-//                     }
-//                 }
-//                 appendToRun(nodes[0].winnerKey);
-//                 mostRecentWinner = nodes[0].winner;
-//             }
-//         }
-//     }
-
-//     // step 2 = run formation
-//     // step 3 = tree flush
-//     // void formRun() {
-//     //     do {
-
-//     //     } while (mostRecentWinner.loserKey != std::tuple(1000, 1000));
-//     // }
-// };
+    //     } while (mostRecentWinner.loserKey != std::tuple(1000, 1000));
+    // }
+};
