@@ -37,7 +37,7 @@ struct ovc<tuple<Args...>> {
         } else {
             auto val1 = get<I>(tuple1);
             auto val2 = get<I>(tuple2);
-            if (val1 != val2) {
+            if (val1 != val2 || I == sizeof...(Args) - 1) {
                 vc_t v = (vc_t)get<I>(tuple1);
                 vc_t vc = std::numeric_limits<vc_t>::max() - v;
                 return {I + 1, vc};
@@ -51,17 +51,14 @@ struct ovc<tuple<Args...>> {
 // TODO: change to template on type T
 template <typename T>
 struct Node {
-    bool isNull;  // TODO: change to optional
     uint32_t winner;
     uint32_t loser;
     T key;
     T winnerKey;
     T loserKey;
     ovc_t nodeOvc;
-    uint32_t index;
-    uint32_t parent() { return index / 2; }
-    uint32_t leftChild() { return index * 2; }
-    uint32_t rightChild() { return index * 2 + 1; }
+
+    Node() {}
 };
 
 // TODO: change to class
@@ -96,6 +93,7 @@ class RandomInputStream : public InputStream<std::tuple<uint32_t, uint32_t>> {
     uint32_t size_;
 };
 
+// to be generalised
 std::tuple<uint32_t, uint32_t> minimalKey() { return std::make_tuple(0, 0); }
 
 #define MAX_NODES 1024  // TODO: magic number, should be changable?
@@ -105,13 +103,31 @@ class TreeOfLosers<tuple<Args...>> {
     std::optional<Node<tuple<Args...>>> nodes[MAX_NODES];
     uint32_t mostRecentWinner;
     InputStream<tuple<Args...>> inputStream;
+    ovc<tuple<Args...>> ovcCalculator;
 
    public:
     TreeOfLosers(InputStream<tuple<Args...>> inputStream)
-        : inputStream(inputStream) {}
+        : inputStream(inputStream) {
+        // set all nodes to null
+        for (int i = 0; i < MAX_NODES; i++) {
+            nodes[i] = {};
+        }
+
+        // for each leaf node
+        // assumption: number of nodes is power of 2
+        for (int i = MAX_NODES / 2; i < MAX_NODES; i++) {
+            auto newLeaf = Node<tuple<Args...>>();
+            newLeaf.winnerKey = inputStream.getNext();
+            newLeaf.winner = i;
+            newLeaf.nodeOvc =
+                ovcCalculator.get_ovc(newLeaf.winnerKey, minimalKey());
+
+            nodes[i] = std::make_optional(newLeaf);
+        }
+    }
 
     void initialize() {
-        for (int i = 0; i < 1024; i++) {
+        for (int i = 0; i < MAX_NODES; i++) {
             nodes[i].winnerKey = inputStream.getNext();
             nodes[i].winner = i;
             nodes[i].ovc = ovc(nodes[i].winnerKey, minimalKey());

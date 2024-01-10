@@ -28,17 +28,17 @@ int main() {
         RandomInputStream ris(0, 1000, 10000);
         auto tree = TreeOfLosers<tuple<uint32_t, uint32_t>>(ris);
 
-        auto l = make_unique<ParallelScan>("lineitem");
-        IU* lq = l->getIU("l_quantity");
-        IU* lp = l->getIU("l_extendedprice");
-        IU* lo = l->getIU("l_orderkey");
+        // auto l = make_unique<ParallelScan>("lineitem");
+        // IU* lq = l->getIU("l_quantity");
+        // IU* lp = l->getIU("l_extendedprice");
+        // IU* lo = l->getIU("l_orderkey");
 
-        auto topK = make_unique<ParallelTopK>(
-            std::move(l), std::vector<IU*>({lq, lp, lo}), 10);
-        produceAndSynchronizedPrint(
-            std::move(topK),
-            {lq, lp,
-             lo});  // limits the ouptut (don't use this for optimization)
+        // auto topK = make_unique<ParallelTopK>(
+        //     std::move(l), std::vector<IU*>({lq, lp, lo}), 10);
+        // produceAndSynchronizedPrint(
+        //     std::move(topK),
+        //     {lq, lp,
+        //      lo});  // limits the ouptut (don't use this for optimization)
     }
     return 0;
 }
