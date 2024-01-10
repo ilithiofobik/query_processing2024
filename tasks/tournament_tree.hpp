@@ -61,7 +61,7 @@ class RandomInputStream : public InputStream<std::tuple<uint32_t, uint32_t>> {
     uint32_t size_;
 };
 
-// to be generalised
+// TODO: to be generalised
 std::tuple<uint32_t, uint32_t> minimalKey() { return std::make_tuple(0, 0); }
 
 #define MAX_NODES 1024  // TODO: magic number, should be changable?
@@ -179,9 +179,9 @@ class TreeOfLosers<tuple<Args...>> {
     }
 
     // ovc calculations
-    template <unsigned I = 0, typename... Tuple>
-    constexpr inline static ovc_t calc_ovc(const tuple<Tuple...> &tuple1,
-                                           const tuple<Tuple...> &tuple2) {
+    template <unsigned I = 0>
+    constexpr inline static ovc_t calc_ovc(const tuple<Args...> &tuple1,
+                                           const tuple<Args...> &tuple2) {
         if constexpr (I == sizeof...(Args)) {
             throw std::runtime_error("Tuples are equal");
         } else {
@@ -192,7 +192,7 @@ class TreeOfLosers<tuple<Args...>> {
                 vc_t vc = std::numeric_limits<vc_t>::max() - v;
                 return {I + 1, vc};
             } else {
-                return calc_ovc<I + 1, Tuple...>(tuple1, tuple2);
+                return calc_ovc<I + 1>(tuple1, tuple2);
             }
         }
     }
