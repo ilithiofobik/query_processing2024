@@ -124,85 +124,92 @@ class TreeOfLosers<tuple<Args...>> {
 
             nodes[i] = std::make_optional(newLeaf);
         }
-    }
 
-    void initialize() {
-        for (int i = 0; i < MAX_NODES; i++) {
-            nodes[i].winnerKey = inputStream.getNext();
-            nodes[i].winner = i;
-            nodes[i].ovc = ovc(nodes[i].winnerKey, minimalKey());
-            nodes[i].isNull = false;
-        }
-    }
+        // for each internal node fill up the tree
+        for (int i = MAX_NODES / 2 - 1; i >= 0; i--) {
+            auto leftIdx = getLeftChild(i);
+            auto rightIdx = getRightChild(i);
 
-    // initialization = step 1
-    TreeOfLosers() {
-        inputStream = {0, 10000};
+            if (leftIdx.has_value() && rightIdx.has_value()) {
+                auto left = nodes[leftIdx.value()].value();
+                auto right = nodes[rightIdx.value()].value();
+                auto newInternal = Node<tuple<Args...>>();
 
-        for (int i = 0; i < 1024; i++) {
-            nodes[i].winnerKey = inputStream.getNext();
-            nodes[i].winner = i;
-            nodes[i].ovc = ovc(nodes[i].winnerKey, minimalKey());
-            nodes[i].isNull = false;
-        }
+                // case 1
+                if (left.nodeOvc < right.nodeOvc) {
+                    newInternal.winnerKey = right.winnerKey;
+                    newInternal.winner = right.winner;
+                    newInternal.loserKey = left.winnerKey;
+                    newInternal.loser = left.winner;
+                    newInternal.nodeOvc = left.nodeOvc;
+                }
 
-        for (int i = 1023; i >= 0; i--) {
-            uint32_t leftIdx = nodes[i].leftChild();
-            uint32_t rightIdx = nodes[i].rightChild();
-            if (rightIdx < 1024) {
-                if (!((nodes[leftIdx]).isNull) && !((nodes[rightIdx]).isNull)) {
-                    auto left = (nodes[leftIdx]);
-                    auto right = (nodes[rightIdx]);
+                // case 2
+                if (left.nodeOvc > right.nodeOvc) {
+                    newInternal.winnerKey = left.winnerKey;
+                    newInternal.winner = left.winner;
+                    newInternal.loserKey = right.winnerKey;
+                    newInternal.loser = right.winner;
+                    newInternal.nodeOvc = right.nodeOvc;
+                }
 
-                    // case 1
-                    if (left.nodeOvc < right.nodeOvc) {
-                        nodes[i].winnerKey = right.winnerKey;
-                        nodes[i].winner = right.winner;
-                        nodes[i].loserKey = left.winnerKey;
-                        nodes[i].loser = left.winner;
-                        nodes[i].nodeOvc = left.nodeOvc;
+                // case 3
+                if (left.nodeOvc == right.nodeOvc) {
+                    // case 3.1
+                    if (left.winner < right.winner) {
+                        newInternal.winnerKey = left.winnerKey;
+                        newInternal.winner = left.winner;
+                        newInternal.loserKey = right.winnerKey;
+                        newInternal.loser = right.winner;
+                        newInternal.nodeOvc =
+                            ovcCalculator.get_ovc(right.key, left.key);
                     }
-
-                    // case 2
-                    if (left.nodeOvc > right.nodeOvc) {
-                        nodes[i].winnerKey = left.winnerKey;
-                        nodes[i].winner = left.winner;
-                        nodes[i].loserKey = right.winnerKey;
-                        nodes[i].loser = right.winner;
-                        nodes[i].nodeOvc = right.nodeOvc;
-                    }
-
-                    // case 3
-                    if (left.ovc == right.ovc) {
-                        // case 3.1
-                        if (left.winner < right.winner) {
-                            nodes[i].winnerKey = left.winnerKey;
-                            nodes[i].winner = left.winner;
-                            nodes[i].loserKey = right.winnerKey;
-                            nodes[i].loser = right.winner;
-                            nodes[i].ovc = ovc(right.key, left.key);
-                        }
-                        // case 3.2
-                        else {
-                            nodes[i].winnerKey = right.winnerKey;
-                            nodes[i].winner = right.winner;
-                            nodes[i].loserKey = left.winnerKey;
-                            nodes[i].loser = left.winner;
-                            nodes[i].ovc = ovc(left.key, right.key);
-                        }
+                    // case 3.2
+                    else {
+                        newInternal.winnerKey = right.winnerKey;
+                        newInternal.winner = right.winner;
+                        newInternal.loserKey = left.winnerKey;
+                        newInternal.loser = left.winner;
+                        newInternal.nodeOvc =
+                            ovcCalculator.get_ovc(left.key, right.key);
                     }
                 }
-                appendToRun(nodes[0].winnerKey);
-                mostRecentWinner = nodes[0].winner;
+
+                nodes[i] = std::make_optional(newInternal);
             }
         }
     }
 
-    // step 2 = run formation
-    // step 3 = tree flush
-    // void formRun() {
-    //     do {
+   private:
+    std::optional<uint32_t> getLeftChild(uint32_t idx) {
+        uint32_t leftIdx = idx * 2;
+        if (leftIdx < MAX_NODES && nodes[leftIdx].has_value()) {
+            return std::make_optional(leftIdx);
+        } else {
+            return {};
+        }
+    }
 
-    //     } while (mostRecentWinner.loserKey != std::tuple(1000, 1000));
-    // }
+    std::optional<uint32_t> getRightChild(uint32_t idx) {
+        uint32_t rightIdx = idx * 2 + 1;
+        if (rightIdx < MAX_NODES && nodes[rightIdx].has_value()) {
+            return std::make_optional(rightIdx);
+        } else {
+            return {};
+        }
+    }
+
+    std::optional<uint32_t> getParent(uint32_t idx) {
+        // special case
+        if (idx == 0) {
+            return {};
+        };
+
+        uint32_t parentIdx = idx / 2;
+        if (parentIdx < MAX_NODES && nodes[parentIdx].has_value()) {
+            return std::make_optional(parentIdx);
+        } else {
+            return {};
+        }
+    }
 };
