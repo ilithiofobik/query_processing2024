@@ -64,7 +64,7 @@ class RandomInputStream : public InputStream<std::tuple<uint32_t, uint32_t>> {
 template <typename T>
 class OutputStream {
    public:
-    void putNext(T value) = 0;
+    virtual void putNext(T value){};
 };
 
 template <typename T>
@@ -74,11 +74,30 @@ class VectorOutputStream : public OutputStream<T> {
     virtual void putNext(T value) override { vec_.push_back(value); }
 
    private:
-    std::vector<T> &vec_;
+    std::vector<T> vec_;
 };
 
 // TODO: to be generalised
 std::tuple<uint32_t, uint32_t> minimalKey() { return std::make_tuple(0, 0); }
+
+// generic function to compare optionals
+// treates None values as infinities
+// made only to avoid generic infinities
+template <typename T>
+bool lessThan(std::optional<T> a, std::optional<T> b) {
+    // a is infinity
+    if (!a.has_value()) {
+        return false;
+    }
+    // b is infinity
+    else if (!b.has_value()) {
+        return true;
+    }
+    // definite values
+    else {
+        return a < b;
+    }
+}
 
 #define MAX_NODES 1024  // TODO: magic number, should be changable?
 
@@ -99,7 +118,8 @@ class TreeOfLosers<tuple<Args...>> {
         }
     }
 
-    TreeOfLosers(InputStream<tuple<Args...>> &is) {
+    TreeOfLosers(InputStream<tuple<Args...>> &is,
+                 OutputStream<tuple<Args...>> &os) {
         // set all nodes to null
         for (int i = 0; i < MAX_NODES; i++) {
             nodes[i] = {};
@@ -122,7 +142,7 @@ class TreeOfLosers<tuple<Args...>> {
             auto rightIdx = getRightChild(i);
 
             if (leftIdx.has_value() && rightIdx.has_value()) {
-                printf("i: %d\n", i);
+                // printf("i: %d\n", i);
                 auto left = nodes[leftIdx.value()].value();
                 auto right = nodes[rightIdx.value()].value();
                 auto newInternal = Node<tuple<Args...>>();
@@ -171,6 +191,21 @@ class TreeOfLosers<tuple<Args...>> {
                 nodes[i] = std::make_optional(newInternal);
             }
         }
+
+        auto root = nodes[1].value();
+        os.putNext(root.winnerKey);
+        mostRecentWinner = root.winner;
+    }
+
+    void formRun(InputStream<tuple<Args...>> &is,
+                 OutputStream<tuple<Args...>> &os, tuple<Args..> maxKey) {
+        // while (maxKey != nodes[mostRecentWinner].value().loserKey) {
+        while
+            nodes[mostRecentWinner].has_value() {
+                auto temp = nodes[mostRecentWinner].value();
+                auto pathWinner = nodes[mostRecentWinner].value();
+                pathWinner.loserKey = is.getNext();
+            }
     }
 
    private:

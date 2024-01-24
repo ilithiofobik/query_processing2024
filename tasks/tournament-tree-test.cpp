@@ -26,7 +26,8 @@ int main() {
         // my exepriments with tournament tree
         // to be moved to different file
         RandomInputStream ris(0, 1000, 10000);
-        auto tree = TreeOfLosers<tuple<uint32_t, uint32_t>>(ris);
+        VectorOutputStream<tuple<uint32_t, uint32_t>> vos;
+        auto tree = TreeOfLosers<tuple<uint32_t, uint32_t>>(ris, vos);
 
         // print first node in the tree
         // (the one with the smallest key)
