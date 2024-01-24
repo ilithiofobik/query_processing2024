@@ -30,13 +30,13 @@ int main() {
 
         // print first node in the tree
         // (the one with the smallest key)
-        auto node = tree.getNode(256);
+        auto node = tree.getNode(1);
 
         print("winner: {}\n", node.winner);
         print("loser: {}\n", node.loser);
-        print("key: {}\n", node.key);
         print("winnerKey: {}\n", node.winnerKey);
         print("loserKey: {}\n", node.loserKey);
+        print("nodeOvc: {}\n", node.nodeOvc);
 
         // auto l = make_unique<ParallelScan>("lineitem");
         // IU* lq = l->getIU("l_quantity");

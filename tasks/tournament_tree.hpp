@@ -22,7 +22,6 @@ template <typename T>
 struct Node {
     uint32_t winner;
     uint32_t loser;
-    T key;
     T winnerKey;
     T loserKey;
     ovc_t nodeOvc;
@@ -45,12 +44,10 @@ class RandomInputStream : public InputStream<std::tuple<uint32_t, uint32_t>> {
     }
 
     virtual std::tuple<uint32_t, uint32_t> getNext() override {
-        printf("jestem w override\n");
         if (counter_ < size_) {
             counter_++;
             uint32_t first = rand() % max_ + min_;
             uint32_t second = rand() % max_ + min_;
-            printf("first: %d, second: %d\n", first, second);
             return std::make_tuple(first, second);
         } else {
             return std::make_tuple(max_, max_);  // return infinity
@@ -64,12 +61,29 @@ class RandomInputStream : public InputStream<std::tuple<uint32_t, uint32_t>> {
     uint32_t size_;
 };
 
+template <typename T>
+class OutputStream {
+   public:
+    void putNext(T value) = 0;
+};
+
+template <typename T>
+class VectorOutputStream : public OutputStream<T> {
+   public:
+    VectorOutputStream() {}
+    virtual void putNext(T value) override { vec_.push_back(value); }
+
+   private:
+    std::vector<T> &vec_;
+};
+
 // TODO: to be generalised
 std::tuple<uint32_t, uint32_t> minimalKey() { return std::make_tuple(0, 0); }
 
 #define MAX_NODES 1024  // TODO: magic number, should be changable?
 
 template <typename... Args>
+// root at node 1
 class TreeOfLosers<tuple<Args...>> {
     std::optional<Node<tuple<Args...>>> nodes[MAX_NODES];
     uint32_t mostRecentWinner;
@@ -86,8 +100,6 @@ class TreeOfLosers<tuple<Args...>> {
     }
 
     TreeOfLosers(InputStream<tuple<Args...>> &is) {
-        printf("TreeOfLosers constructor\n");
-
         // set all nodes to null
         for (int i = 0; i < MAX_NODES; i++) {
             nodes[i] = {};
@@ -105,11 +117,12 @@ class TreeOfLosers<tuple<Args...>> {
         }
 
         // for each internal node fill up the tree
-        for (int i = MAX_NODES / 2 - 1; i >= 0; i--) {
+        for (int i = MAX_NODES / 2 - 1; i > 0; i--) {
             auto leftIdx = getLeftChild(i);
             auto rightIdx = getRightChild(i);
 
             if (leftIdx.has_value() && rightIdx.has_value()) {
+                printf("i: %d\n", i);
                 auto left = nodes[leftIdx.value()].value();
                 auto right = nodes[rightIdx.value()].value();
                 auto newInternal = Node<tuple<Args...>>();
@@ -135,12 +148,14 @@ class TreeOfLosers<tuple<Args...>> {
                 // case 3
                 if (left.nodeOvc == right.nodeOvc) {
                     // case 3.1
-                    if (left.winner < right.winner) {
+                    // index or key
+                    if (left.winnerKey < right.winnerKey) {
                         newInternal.winnerKey = left.winnerKey;
                         newInternal.winner = left.winner;
                         newInternal.loserKey = right.winnerKey;
                         newInternal.loser = right.winner;
-                        newInternal.nodeOvc = calc_ovc(right.key, left.key);
+                        newInternal.nodeOvc =
+                            calc_ovc(right.winnerKey, left.winnerKey);
                     }
                     // case 3.2
                     else {
@@ -148,7 +163,8 @@ class TreeOfLosers<tuple<Args...>> {
                         newInternal.winner = right.winner;
                         newInternal.loserKey = left.winnerKey;
                         newInternal.loser = left.winner;
-                        newInternal.nodeOvc = calc_ovc(left.key, right.key);
+                        newInternal.nodeOvc =
+                            calc_ovc(left.winnerKey, right.winnerKey);
                     }
                 }
 
