@@ -17,7 +17,7 @@ typedef std::tuple<o_t, vc_t> ovc_t;
 template <class T>
 class TreeOfLosers;
 
-// TODO: change to template on type T
+// template is general, but used only on tuples
 template <typename T>
 struct Node {
     uint32_t winner;
@@ -34,7 +34,6 @@ struct Node {
 template <typename T>
 class InputStream {
    public:
-    InputStream() {}
     virtual T getNext() { return {}; };
 };
 
@@ -45,10 +44,14 @@ class RandomInputStream : public InputStream<std::tuple<uint32_t, uint32_t>> {
         srand(time(NULL));
     }
 
-    std::tuple<uint32_t, uint32_t> getNext() {
+    virtual std::tuple<uint32_t, uint32_t> getNext() override {
+        printf("jestem w override\n");
         if (counter_ < size_) {
             counter_++;
-            return std::make_tuple(rand() % max_ + min_, rand() % max_ + min_);
+            uint32_t first = rand() % max_ + min_;
+            uint32_t second = rand() % max_ + min_;
+            printf("first: %d, second: %d\n", first, second);
+            return std::make_tuple(first, second);
         } else {
             return std::make_tuple(max_, max_);  // return infinity
         }
@@ -70,11 +73,21 @@ template <typename... Args>
 class TreeOfLosers<tuple<Args...>> {
     std::optional<Node<tuple<Args...>>> nodes[MAX_NODES];
     uint32_t mostRecentWinner;
-    InputStream<tuple<Args...>> inputStream;
 
    public:
-    TreeOfLosers(InputStream<tuple<Args...>> inputStream)
-        : inputStream(inputStream) {
+    // getting node with given index
+    Node<tuple<Args...>> getNode(uint32_t idx) {
+        if (idx < MAX_NODES && nodes[idx].has_value()) {
+            return nodes[idx].value();
+        } else {
+            printf("Node does not exist\n");
+            throw std::runtime_error("Node does not exist");
+        }
+    }
+
+    TreeOfLosers(InputStream<tuple<Args...>> &is) {
+        printf("TreeOfLosers constructor\n");
+
         // set all nodes to null
         for (int i = 0; i < MAX_NODES; i++) {
             nodes[i] = {};
@@ -84,7 +97,7 @@ class TreeOfLosers<tuple<Args...>> {
         // assumption: number of nodes is power of 2
         for (int i = MAX_NODES / 2; i < MAX_NODES; i++) {
             auto newLeaf = Node<tuple<Args...>>();
-            newLeaf.winnerKey = inputStream.getNext();
+            newLeaf.winnerKey = is.getNext();
             newLeaf.winner = i;
             newLeaf.nodeOvc = calc_ovc(newLeaf.winnerKey, minimalKey());
 
@@ -183,6 +196,7 @@ class TreeOfLosers<tuple<Args...>> {
     constexpr inline static ovc_t calc_ovc(const tuple<Args...> &tuple1,
                                            const tuple<Args...> &tuple2) {
         if constexpr (I == sizeof...(Args)) {
+            printf("Tuples are equal\n");
             throw std::runtime_error("Tuples are equal");
         } else {
             auto val1 = get<I>(tuple1);
