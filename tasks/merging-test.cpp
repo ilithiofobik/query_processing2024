@@ -73,9 +73,9 @@ int mergeStandardPQ(const std::vector<std::vector<int>>& runs,
 
         if (minVal < previous) {
             std::cerr << "Error: " << minVal << " < " << previous << std::endl;
-            previous = minVal;
             return -1;
         }
+        previous = minVal;
 
         pq.pop();
 
@@ -93,9 +93,16 @@ int mergeStandardPQ(const std::vector<std::vector<int>>& runs,
 // Merge runs using tree-of-losers priority queue
 int mergeLoserTreePQ(const std::vector<std::vector<int>>& runs) {
     LoserTree lt(runs);
-    // while (!lt.empty()) {
-    //     lt.next(runs);
-    // }
+
+    int previous = -1;
+    while (!lt.empty()) {
+        int next = lt.next(runs);
+        if (next < previous) {
+            std::cerr << "Error: " << next << " < " << previous << std::endl;
+            return -1;
+        }
+        previous = next;
+    }
     return lt.getComparisonCount();
 }
 

@@ -49,15 +49,12 @@ class LoserTree {
     int next(const std::vector<std::vector<int>>& runs) {
         // Implementation to extract the next element and adjust the tree
         int result = internal[0].value;
-
-        // replace value in external node
         size_t runNumber = internal[0].runNumber;
-        size_t vectorIdx = external[runNumber].vectorIdx;
-        size_t nextIdx = vectorIdx + 1;
-        external[runNumber].vectorIdx = nextIdx;
+        external[runNumber].vectorIdx += 1;
 
-        if (nextIdx < runs[runNumber].size()) {
-            external[runNumber].value = runs[runNumber][nextIdx];
+        if (external[runNumber].vectorIdx < runs[runNumber].size()) {
+            external[runNumber].value =
+                runs[runNumber][external[runNumber].vectorIdx];
 
         } else {
             external[runNumber].value = std::numeric_limits<int>::max();
@@ -65,17 +62,19 @@ class LoserTree {
 
         // rebalance tree
         int currentWinner = external[runNumber].value;
-        size_t currentWinnerIdx = runNumber;
-        size_t idx = runNumber / 2;
+        size_t idx = (runNumber + size) / 2;
 
         while (idx > 0) {
             comparisonCount++;
-            if (internal[idx].value < currentWinner) {
+            if (internal[idx].value <= currentWinner) {
                 std::swap(currentWinner, internal[idx].value);
                 std::swap(runNumber, internal[idx].runNumber);
             }
             idx /= 2;
         }
+
+        internal[0].value = currentWinner;
+        internal[0].runNumber = runNumber;
 
         return result;
     }
