@@ -83,14 +83,21 @@ inline void repeat(const F &f) {
     }
 }
 //---------------------------------------------------------------------------
-template <typename T, typename F, unsigned I = 0, typename... Args>
-constexpr inline T __fold_tuple(const std::tuple<Args...> &tuple, T acc_or_init,
+template 
+<typename T, 
+typename F, 
+unsigned I = 0, 
+typename... Args>
+constexpr inline T __fold_tuple(const std::tuple<Args...> &tuple, 
+T acc_or_init,
                                 const F &fn) {
     if constexpr (I == sizeof...(Args)) {
         return acc_or_init;
     } else {
         return __fold_tuple<T, F, I + 1, Args...>(
-            tuple, fn(acc_or_init, std::get<I>(tuple)), fn);
+            tuple, 
+            fn(acc_or_init, std::get<I>(tuple)), 
+            fn);
     }
 }
 //---------------------------------------------------------------------------
@@ -98,7 +105,9 @@ constexpr inline T __fold_tuple(const std::tuple<Args...> &tuple, T acc_or_init,
 template <typename... Args>
 inline uint64_t hashKey(const std::tuple<Args...> &args) {
     return __fold_tuple(
-        args, 0ul, [](const uint64_t acc, const auto &val) -> uint64_t {
+        args, 
+        0ul, 
+        [](const uint64_t acc, const auto &val) -> uint64_t {
             return acc ^ (MurmurHash64A(val) + 0x517cc1b727220a95ul +
                           (acc << 6) + (acc >> 2));
         });

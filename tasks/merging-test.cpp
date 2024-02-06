@@ -4,36 +4,8 @@
 #include <random>
 #include <vector>
 
+#include "count-comparer.hpp"
 #include "loser-tree.hpp"
-
-#define P 16  // number of sorted runs
-
-struct KnuthNode {
-    int key;
-    int record;
-    int loser;
-    int rn;
-    int pe;
-    int pi;
-};
-
-// A node for the tree-of-losers priority queue
-struct TreeNode {
-    int value;
-    int runIndex;
-    bool operator>(const TreeNode& other) const { return value > other.value; }
-};
-
-// Function to count comparisons for std::priority_queue
-template <typename T>
-struct compare_count {
-    int& count;
-    compare_count(int& count) : count(count) {}
-    bool operator()(const T& a, const T& b) {
-        ++count;
-        return a > b;  // sorts in ascending order
-    }
-};
 
 // Generate sorted runs with random numbers
 std::vector<std::vector<int>> generateSortedRuns(int runSize, int numRuns) {
@@ -53,8 +25,8 @@ std::vector<std::vector<int>> generateSortedRuns(int runSize, int numRuns) {
 }
 
 // Merge runs using standard priority queue
-int mergeStandardPQ(const std::vector<std::vector<int>>& runs,
-                    int& comparisonCount) {
+void mergeStandardPQ(const std::vector<std::vector<int>>& runs,
+                     int& comparisonCount) {
     std::priority_queue<std::tuple<int, size_t>,
                         std::vector<std::tuple<int, size_t>>,
                         compare_count<std::tuple<int, size_t>>>
@@ -73,7 +45,7 @@ int mergeStandardPQ(const std::vector<std::vector<int>>& runs,
 
         if (minVal < previous) {
             std::cerr << "Error: " << minVal << " < " << previous << std::endl;
-            return -1;
+            return;
         }
         previous = minVal;
 
@@ -86,33 +58,30 @@ int mergeStandardPQ(const std::vector<std::vector<int>>& runs,
             pq.push({runs[minIndex][indices[minIndex]], minIndex});
         }
     }
-
-    return comparisonCount;
 }
 
 // Merge runs using tree-of-losers priority queue
-int mergeLoserTreePQ(const std::vector<std::vector<int>>& runs) {
-    LoserTree lt(runs);
+void mergeLoserTreePQ(const std::vector<std::vector<int>>& runs,
+                      int& comparisonCount) {
+    LoserTree lt(runs, compare_count<int>(comparisonCount));
 
     int previous = -1;
     while (!lt.empty()) {
         int next = lt.next(runs);
         if (next < previous) {
             std::cerr << "Error: " << next << " < " << previous << std::endl;
-            return -1;
+            return;
         }
         previous = next;
     }
-    return lt.getComparisonCount();
 }
 
 int main() {
-    std::vector<int> runSizes = {1000, 10000, 100000};
-    int numRuns = 8;
+    std::vector<int> runSizes = {100, 1000, 10000, 100000};
+    int numRuns = 16;
     int numOfTests = 10;
 
     for (int n : runSizes) {
-        float nf = static_cast<float>(n);
         int comparisonCountStandard = 0;
         int comparisonCountLoserTree = 0;
 
@@ -120,19 +89,19 @@ int main() {
             auto runs = generateSortedRuns(n, numRuns);
 
             mergeStandardPQ(runs, comparisonCountStandard);
-            comparisonCountLoserTree += mergeLoserTreePQ(runs);
+            mergeLoserTreePQ(runs, comparisonCountLoserTree);
         }
 
         float avgStandard =
             static_cast<float>(comparisonCountStandard) / numOfTests;
         float avgLoserTree =
             static_cast<float>(comparisonCountLoserTree) / numOfTests;
-        float lowerBound = nf * std::log2f(nf * std::exp(-1.0));
+        float ratio = avgLoserTree / avgStandard;
 
         std::cout << "For run size " << n << ":\n";
         std::cout << "Standard PQ comparisons: " << avgStandard << "\n";
         std::cout << "LoserTree PQ comparisons: " << avgLoserTree << "\n";
-        std::cout << "Lower bound: " << lowerBound << "\n\n";
+        std::cout << "Ratio: " << ratio << "\n\n";
     }
 
     return 0;

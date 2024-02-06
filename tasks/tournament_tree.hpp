@@ -18,11 +18,12 @@ template <class T>
 class TreeOfLosers;
 
 // template is general, but used only on tuples
+
 template <typename T>
 struct Node {
     uint32_t winner;
     uint32_t loser;
-    T winnerKey;
+    T winnerKey;  // None = infinity
     T loserKey;
     ovc_t nodeOvc;
 
@@ -34,6 +35,52 @@ template <typename T>
 class InputStream {
    public:
     virtual T getNext() { return {}; };
+};
+
+template <typename... Args>
+class NewRandomInputStream : public InputStream<std::tuple<Args...>> {
+   public:
+    NewRandomInputStream(uint32_t min, uint32_t max, uint32_t size)
+        : min_(min), max_(max), counter_(0), size_(size) {
+        srand(time(NULL));
+    }
+
+    virtual std::tuple<Args...> getNext() override {
+        // for now return infinity
+        std::tuple<Args...> t = {};
+
+        if (counter_ < size_) {
+            setToRand(t, min_, max_);
+        } else {
+            setToMax(t);  // return infinity
+        }
+
+        return t;
+    }
+
+   private:
+    uint32_t min_;
+    uint32_t max_;
+    uint32_t counter_;
+    uint32_t size_;
+
+    template <unsigned I = 0>
+    constexpr inline static void setToMax(tuple<Args...> &tuple) {
+        if constexpr (I < sizeof...(Args)) {
+            get<I>(tuple) = std::numeric_limits<vc_t>::max();
+            setToMax<I + 1>(tuple);
+        }
+    }
+
+    template <unsigned I = 0>
+    constexpr inline static void setToRand(tuple<Args...> &tuple, uint32_t min,
+                                           uint32_t max) {
+        if constexpr (I < sizeof...(Args)) {
+            get<I>(tuple) = rand() % max + min;
+            setToRand<I + 1>(tuple, min, max);
+            printf("doing random stuff\n");
+        }
+    }
 };
 
 class RandomInputStream : public InputStream<std::tuple<uint32_t, uint32_t>> {
@@ -50,7 +97,7 @@ class RandomInputStream : public InputStream<std::tuple<uint32_t, uint32_t>> {
             uint32_t second = rand() % max_ + min_;
             return std::make_tuple(first, second);
         } else {
-            return std::make_tuple(max_, max_);  // return infinity
+            return {};  // return infinity \ None value
         }
     }
 
@@ -128,11 +175,11 @@ class TreeOfLosers<tuple<Args...>> {
         // for each leaf node
         // assumption: number of nodes is power of 2
         for (int i = MAX_NODES / 2; i < MAX_NODES; i++) {
+            auto newKey = is.getNext();
             auto newLeaf = Node<tuple<Args...>>();
-            newLeaf.winnerKey = is.getNext();
+            newLeaf.winnerKey = newKey;
             newLeaf.winner = i;
             newLeaf.nodeOvc = calc_ovc(newLeaf.winnerKey, minimalKey());
-
             nodes[i] = std::make_optional(newLeaf);
         }
 
@@ -198,14 +245,14 @@ class TreeOfLosers<tuple<Args...>> {
     }
 
     void formRun(InputStream<tuple<Args...>> &is,
-                 OutputStream<tuple<Args...>> &os, tuple<Args..> maxKey) {
+                 OutputStream<tuple<Args...>> &os) {
         // while (maxKey != nodes[mostRecentWinner].value().loserKey) {
-        while
-            nodes[mostRecentWinner].has_value() {
-                auto temp = nodes[mostRecentWinner].value();
-                auto pathWinner = nodes[mostRecentWinner].value();
-                pathWinner.loserKey = is.getNext();
-            }
+        // while mostRecentWinner is not infinity
+        while (nodes[mostRecentWinner].has_value()) {
+            auto temp = nodes[mostRecentWinner].value();
+            auto pathWinner = nodes[mostRecentWinner].value();
+            pathWinner.loserKey = is.getNext();
+        }
     }
 
    private:

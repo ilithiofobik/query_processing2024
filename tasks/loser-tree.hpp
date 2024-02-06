@@ -18,13 +18,13 @@ struct InternalNode {
 class LoserTree {
     std::vector<ExternalNode> external;  // Vector of internal nodes
     std::vector<InternalNode> internal;  // Vector of internal nodes
-
-    size_t size;  // Number of runs
-    int comparisonCount;
+    size_t size;                         // Number of runs
+    compare_count<int> comp;
 
    public:
-    LoserTree(const std::vector<std::vector<int>>& runs)
-        : size(runs.size()), comparisonCount(0) {
+    LoserTree(const std::vector<std::vector<int>>& runs,
+              compare_count<int> comp)
+        : size(runs.size()), comp(comp) {
         // Allocate memory for internal and external nodes
         // Initialize the tree with the first elements of each run
 
@@ -42,8 +42,6 @@ class LoserTree {
         internal[0].value = std::get<0>(winner);
         internal[0].runNumber = std::get<1>(winner);
     }
-
-    int getComparisonCount() const { return comparisonCount; }
 
     // Extract the next element from the tree
     int next(const std::vector<std::vector<int>>& runs) {
@@ -64,19 +62,23 @@ class LoserTree {
         int currentWinner = external[runNumber].value;
         size_t idx = (runNumber + size) / 2;
 
-        while (idx > 0) {
-            comparisonCount++;
-            if (internal[idx].value <= currentWinner) {
-                std::swap(currentWinner, internal[idx].value);
-                std::swap(runNumber, internal[idx].runNumber);
-            }
-            idx /= 2;
-        }
-
-        internal[0].value = currentWinner;
-        internal[0].runNumber = runNumber;
+        update(idx, currentWinner, runNumber);
 
         return result;
+    }
+
+    void update(size_t idx, int currentWinner, size_t runNumber) {
+        if (idx == 0) {
+            internal[idx].value = currentWinner;
+            internal[idx].runNumber = runNumber;
+            return;
+        }
+
+        if (comp(currentWinner, internal[idx].value)) {
+            std::swap(currentWinner, internal[idx].value);
+            std::swap(runNumber, internal[idx].runNumber);
+        }
+        update(idx / 2, currentWinner, runNumber);
     }
 
     std::tuple<int, size_t> getSubtreeWinner(size_t idx) {
@@ -85,8 +87,7 @@ class LoserTree {
             int leftIdx = idx * 2 - size;
             int rightIdx = idx * 2 + 1 - size;
 
-            comparisonCount++;
-            if (external[leftIdx].value > external[rightIdx].value) {
+            if (comp(external[leftIdx].value, external[rightIdx].value)) {
                 internal[idx].value = external[leftIdx].value;
                 internal[idx].runNumber = leftIdx;
 
@@ -103,8 +104,7 @@ class LoserTree {
         auto left = getSubtreeWinner(idx * 2);
         auto right = getSubtreeWinner(idx * 2 + 1);
 
-        comparisonCount++;
-        if (std::get<0>(left) < std::get<0>(right)) {
+        if (comp(std::get<0>(right), std::get<0>(left))) {
             internal[idx].value = std::get<0>(right);
             internal[idx].runNumber = std::get<1>(right);
 
