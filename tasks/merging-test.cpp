@@ -1,32 +1,14 @@
-#include <functional>
 #include <iostream>
 #include <queue>
-#include <random>
 #include <vector>
 
 #include "count-comparer.hpp"
 #include "loser-tree.hpp"
-
-// Generate sorted runs with random numbers
-std::vector<std::vector<int>> generateSortedRuns(int runSize, int numRuns) {
-    std::vector<std::vector<int>> runs(numRuns, std::vector<int>(runSize));
-    std::random_device rd;
-    std::mt19937 mt(rd());  // mersenne twister engine
-    std::uniform_int_distribution<int> dist(0, 1000000);
-
-    for (auto& run : runs) {
-        for (auto& val : run) {
-            val = dist(mt);
-        }
-        std::sort(run.begin(), run.end());
-    }
-
-    return runs;
-}
+#include "sorted-runs.hpp"
 
 // Merge runs using standard priority queue
 void mergeStandardPQ(const std::vector<std::vector<int>>& runs,
-                     int& comparisonCount) {
+                     uint64_t& comparisonCount) {
     std::priority_queue<std::tuple<int, size_t>,
                         std::vector<std::tuple<int, size_t>>,
                         compare_count<std::tuple<int, size_t>>>
@@ -62,7 +44,7 @@ void mergeStandardPQ(const std::vector<std::vector<int>>& runs,
 
 // Merge runs using tree-of-losers priority queue
 void mergeLoserTreePQ(const std::vector<std::vector<int>>& runs,
-                      int& comparisonCount) {
+                      uint64_t& comparisonCount) {
     LoserTree lt(runs, compare_count<int>(comparisonCount));
 
     int previous = -1;
@@ -77,13 +59,13 @@ void mergeLoserTreePQ(const std::vector<std::vector<int>>& runs,
 }
 
 int main() {
-    std::vector<int> runSizes = {100, 1000, 10000, 100000};
+    std::vector<int> runSizes = {1000, 10000, 100000, 1000000};
     int numRuns = 16;
-    int numOfTests = 10;
+    int numOfTests = 100;
 
     for (int n : runSizes) {
-        int comparisonCountStandard = 0;
-        int comparisonCountLoserTree = 0;
+        uint64_t comparisonCountStandard = 0;
+        uint64_t comparisonCountLoserTree = 0;
 
         for (int i = 0; i < numOfTests; i++) {
             auto runs = generateSortedRuns(n, numRuns);

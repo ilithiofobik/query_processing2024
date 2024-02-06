@@ -4,26 +4,29 @@
 #include <random>
 #include <vector>
 
+template <typename T>
 struct ExternalNode {
-    int value;
+    T value;
     size_t vectorIdx;
 };
 
+template <typename T>
 struct InternalNode {
-    int value;  // loser for all nodes but the root, root has global winner
+    T value;  // loser for all nodes but the root, root has global winner
     size_t runNumber;
 };
 
 // Tree of Losers class
+
+template <typename T>
 class LoserTree {
-    std::vector<ExternalNode> external;  // Vector of internal nodes
-    std::vector<InternalNode> internal;  // Vector of internal nodes
-    size_t size;                         // Number of runs
-    compare_count<int> comp;
+    std::vector<ExternalNode<T>> external;  // Vector of internal nodes
+    std::vector<InternalNode<T>> internal;  // Vector of internal nodes
+    size_t size;                            // Number of runs
+    compare_count<T> comp;
 
    public:
-    LoserTree(const std::vector<std::vector<int>>& runs,
-              compare_count<int> comp)
+    LoserTree(const std::vector<std::vector<T>>& runs, compare_count<int> comp)
         : size(runs.size()), comp(comp) {
         // Allocate memory for internal and external nodes
         // Initialize the tree with the first elements of each run
