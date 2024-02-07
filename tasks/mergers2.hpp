@@ -4,43 +4,30 @@
 
 #include "count-comparer.hpp"
 #include "loser-tree-ovc.hpp"
+#include "loser-tree.hpp"
 
-// Merge runs using standard priority queue
-void mergeStandardPQ(
+// Merge runs using tree-of-losers priority queue
+std::vector<std::tuple<int, int, int, int, int>> mergeLoserTreePQOvc(
     const std::vector<std::vector<std::tuple<int, int, int, int, int>>>& runs,
-    uint64_t& comparisonCount) {
-    std::priority_queue<
-        std::tuple<std::tuple<int, int, int, int, int>, size_t>,
-        std::vector<std::tuple<std::tuple<int, int, int, int, int>, size_t>>,
-        compare_count<std::tuple<std::tuple<int, int, int, int, int>, size_t>>>
-        pq{compare_count<
-            std::tuple<std::tuple<int, int, int, int, int>, size_t>>(
-            comparisonCount)};
-
-    size_t n = runs.size();
-    std::vector<size_t> indices(n, 0);
-    for (size_t i = 0; i < n; ++i) {
-        pq.push({runs[i][0], i});
+    uint64_t& comparisonCount, uint64_t& comparisonCountOvc) {
+    compare_count<std::tuple<int, int, int, int, int>> comp(comparisonCount);
+    compare_count<uint64_t> compOvc(comparisonCountOvc);
+    LoserTreeOvc<int, int, int, int, int> lt(runs, comp, compOvc);
+    std::vector<std::tuple<int, int, int, int, int>> result;
+    while (!lt.empty()) {
+        std::tuple<int, int, int, int, int> next = lt.next(runs);
+        result.push_back(next);
     }
-
-    while (!pq.empty()) {
-        auto [minVal, minIndex] = pq.top();
-        pq.pop();
-
-        // Increment the index for the corresponding run
-        indices[minIndex]++;
-
-        if (indices[minIndex] < runs[minIndex].size()) {
-            pq.push({runs[minIndex][indices[minIndex]], minIndex});
-        }
-    }
+    return result;
 }
 
 // Merge runs using tree-of-losers priority queue
-std::vector<std::tuple<int, int, int, int, int>> mergeLoserTreePQ(
+std::vector<std::tuple<int, int, int, int, int>> mergeLoserTreePQPlain(
     const std::vector<std::vector<std::tuple<int, int, int, int, int>>>& runs,
-    compare_count<std::tuple<int, int, int, int, int>> comp) {
-    LoserTreeOvc<int, int, int, int, int> lt(runs, comp);
+    uint64_t& comparisonCount) {
+    compare_count<std::tuple<int, int, int, int, int>> comp(comparisonCount);
+    compare_count<uint64_t> compOvc(comparisonCount);
+    LoserTreeOvc<int, int, int, int, int> lt(runs, comp, compOvc);
     std::vector<std::tuple<int, int, int, int, int>> result;
     while (!lt.empty()) {
         std::tuple<int, int, int, int, int> next = lt.next(runs);

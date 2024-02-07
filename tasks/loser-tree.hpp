@@ -3,28 +3,40 @@
 #include <queue>
 #include <vector>
 
-template <typename T>
+template <typename... Args>
 struct ExternalNode {
-    T value;
+    std::tuple<Args...> value;
     size_t vectorIdx;
 };
 
-template <typename T>
+template <typename... Args>
 struct InternalNode {
-    T value;  // loser for all nodes but the root, root has global winner
+    std::tuple<Args...>
+        value;  // loser for all nodes but the root, root has global winner
     size_t runNumber;
 };
 
+template <unsigned I = 0, typename... Args>
+constexpr inline static void setToValue(std::tuple<Args...>& tuple,
+                                        uint64_t value) {
+    if constexpr (I < sizeof...(Args)) {
+        get<I>(tuple) = value;
+        setToValue<I + 1>(tuple, value);
+    }
+}
+
 // Tree of Losers class
-template <typename T>
+template <typename... Args>
 class LoserTree {
-    std::vector<ExternalNode<T>> external;  // Vector of internal nodes
-    std::vector<InternalNode<T>> internal;  // Vector of internal nodes
-    size_t size;                            // Number of runs
-    compare_count<T> comp;
+    std::vector<ExternalNode<Args...>> external;  // Vector of internal nodes
+    std::vector<InternalNode<Args...>> internal;  // Vector of internal nodes
+    size_t size;                                  // Number of runs
+    compare_count<std::tuple<Args...>> comp;
+    std::tuple<Args...> maxTuple;
 
    public:
-    LoserTree(const std::vector<std::vector<T>>& runs, compare_count<int> comp)
+    LoserTree(const std::vector<std::vector<std::tuple<Args...>>>& runs,
+              compare_count<std::tuple<Args...>> comp)
         : size(runs.size()), comp(comp) {
         // Allocate memory for internal and external nodes
         // Initialize the tree with the first elements of each run
@@ -32,22 +44,26 @@ class LoserTree {
         internal.reserve(size);  // first half internal, second half external
         external.reserve(size);
 
+        maxTuple = {};
+        setToValue(maxTuple, 1000);
+
         for (size_t i = 0; i < size; i++) {
             ExternalNode en = {runs[i][0], 0};
-            InternalNode in = {0, 0};  // Remove extra initializer values
+            InternalNode in = {maxTuple, 0};  // Remove extra initializer values
             external.push_back(en);
             internal.push_back(in);
         }
 
-        std::tuple<int, size_t> winner = getSubtreeWinner(1);
+        std::tuple<std::tuple<Args...>, size_t> winner = getSubtreeWinner(1);
         internal[0].value = std::get<0>(winner);
         internal[0].runNumber = std::get<1>(winner);
     }
 
     // Extract the next element from the tree
-    int next(const std::vector<std::vector<int>>& runs) {
+    std::tuple<Args...> next(
+        const std::vector<std::vector<std::tuple<Args...>>>& runs) {
         // Implementation to extract the next element and adjust the tree
-        int result = internal[0].value;
+        std::tuple<Args...> result = internal[0].value;
         size_t runNumber = internal[0].runNumber;
         external[runNumber].vectorIdx += 1;
 
@@ -56,11 +72,11 @@ class LoserTree {
                 runs[runNumber][external[runNumber].vectorIdx];
 
         } else {
-            external[runNumber].value = std::numeric_limits<T>::max();
+            external[runNumber].value = maxTuple;
         }
 
         // rebalance tree
-        int currentWinner = external[runNumber].value;
+        std::tuple<Args...> currentWinner = external[runNumber].value;
         size_t idx = (runNumber + size) / 2;
 
         update(idx, currentWinner, runNumber);
@@ -68,7 +84,8 @@ class LoserTree {
         return result;
     }
 
-    void update(size_t idx, int currentWinner, size_t runNumber) {
+    void update(size_t idx, std::tuple<Args...> currentWinner,
+                size_t runNumber) {
         if (idx == 0) {
             internal[idx].value = currentWinner;
             internal[idx].runNumber = runNumber;
@@ -79,10 +96,11 @@ class LoserTree {
             std::swap(currentWinner, internal[idx].value);
             std::swap(runNumber, internal[idx].runNumber);
         }
+
         update(idx / 2, currentWinner, runNumber);
     }
 
-    std::tuple<int, size_t> getSubtreeWinner(size_t idx) {
+    std::tuple<std::tuple<Args...>, size_t> getSubtreeWinner(size_t idx) {
         // last layer, connected to external
         if (idx >= size / 2) {
             int leftIdx = idx * 2 - size;
@@ -121,6 +139,6 @@ class LoserTree {
     // Check if the tree is empty (all runs are exhausted)
     bool empty() const {
         // Implementation to check if the tree is empty
-        return internal[0].value == std::numeric_limits<T>::max();
+        return internal[0].value == maxTuple;
     }
 };
