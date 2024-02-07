@@ -1,8 +1,7 @@
 #include <random>
 #include <vector>
 
-// Generate sorted runs with random numbers
-std::vector<int> generateSortedRun(int runSize) {
+std::vector<int> generatreRandomRun(int runSize) {
     std::vector<int> run(runSize);
     std::random_device rd;
     std::mt19937 mt(rd());  // mersenne twister engine
@@ -11,7 +10,6 @@ std::vector<int> generateSortedRun(int runSize) {
     for (auto& val : run) {
         val = dist(mt);
     }
-    std::sort(run.begin(), run.end());
 
     return run;
 }

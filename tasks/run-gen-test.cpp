@@ -1,56 +1,92 @@
+#include <iostream>
+#include <vector>
+
+#include "mergers.hpp"
+#include "sorted-runs.hpp"
+
 template <typename T>
-std::vector<std::vector<T>> algorithmR(const std::vector<T>& input) {
-    TreeOfLosers<T> tree;
-    std::vector<std::vector<T>> runs;
-    std::vector<T> currentRun;
-    auto it = input.begin();
+void quicksortRec(std::vector<T>& vec, int low, int high,
+                  compare_count<T> comp) {
+    if (low < high) {
+        // Partitioning index
+        T pivot = vec[high];  // Choosing the last element as pivot
+        int i = (low - 1);    // Index of smaller element
 
-    // Initialize the tree with the first element if the input is not empty
-    if (it != input.end()) {
-        tree.insert(*it);
-        ++it;
+        for (int j = low; j <= high - 1; j++) {
+            // If current element is smaller than or equal to pivot
+            if (comp(vec[j], pivot)) {
+                i++;  // Increment index of smaller element
+                std::swap(vec[i], vec[j]);
+            }
+        }
+        std::swap(vec[i + 1], vec[high]);
+
+        int pi = i + 1;  // pi is partitioning index
+
+        quicksortRec(vec, low, pi - 1,
+                     comp);  // Recursively sort elements before partition
+        quicksortRec(vec, pi + 1, high,
+                     comp);  // Recursively sort elements after partition
     }
+}
 
-    while (!tree.empty()) {
-        T minElement = tree.extract_min();
+// Helper function to start the quicksort algorithm
+template <typename T>
+void quicksort(std::vector<T>& vec, compare_count<T> comp) {
+    if (!vec.empty()) {
+        quicksortRec(vec, 0, vec.size() - 1, comp);
+    }
+}
 
-        // If currentRun is empty or the minElement is not less than the last
-        // element in currentRun
-        if (currentRun.empty() || !(minElement < currentRun.back())) {
-            currentRun.push_back(minElement);
-        } else {
-            // Finalize the current run and start a new one
-            runs.push_back(currentRun);
-            currentRun.clear();
-            currentRun.push_back(minElement);
+template <typename T>
+void loserTreeSort(std::vector<std::vector<T>>& vec, compare_count<T> comp,
+                   size_t n) {
+    while (vec.size() > 1) {
+        std::vector<std::vector<T>> newVec = {};
+
+        for (size_t chunk_start = 0; chunk_start < vec.size();
+             chunk_start += n) {
+            std::vector<std::vector<T>> chunk = {};
+            for (size_t i = chunk_start;
+                 i < std::min(chunk_start + n, vec.size()); i++) {
+                chunk.push_back(vec[i]);
+            }
+            std::vector<T> sortedChunk = mergeLoserTreePQ(chunk, comp);
+            newVec.push_back(sortedChunk);
         }
 
-        // Insert the next input element into the tree, if available
-        if (it != input.end()) {
-            tree.insert(*it);
-            ++it;
-        }
+        vec = newVec;
     }
-
-    // Don't forget to add the last run
-    if (!currentRun.empty()) {
-        runs.push_back(currentRun);
-    }
-
-    return runs;
 }
 
 int main() {
-    // Example usage
-    std::vector<int> input = {5, 3, 6, 7, 2, 4, 9, 1, 8};
-    auto runs = algorithmR(input);
+    std::vector<int> runSizes = {1024, 32768, 1048576};
+    int numOfTests = 100;
 
-    // Print the runs
-    for (const auto& run : runs) {
-        for (int val : run) {
-            std::cout << val << " ";
+    for (int n : runSizes) {
+        uint64_t comparisonCountQuickSort = 0;
+        uint64_t comparisonCountLoserTree = 0;
+
+        for (int i = 0; i < numOfTests; i++) {
+            auto input = generateSortedRuns(1, n);  // n runs of size 1
+            loserTreeSort(input, compare_count<int>(comparisonCountLoserTree),
+                          n);
         }
-        std::cout << std::endl;
+
+        for (int i = 0; i < numOfTests; i++) {
+            auto input = generatreRandomRun(n);
+            quicksort(input, compare_count<int>(comparisonCountQuickSort));
+        }
+
+        float avgQS = static_cast<float>(comparisonCountQuickSort) / numOfTests;
+        float avgLoserTree =
+            static_cast<float>(comparisonCountLoserTree) / numOfTests;
+        float ratio = avgLoserTree / avgQS;
+
+        std::cout << "For run size " << n << ":\n";
+        std::cout << "QS comparisons: " << avgQS << "\n";
+        std::cout << "LoserTree Sort comparisons: " << avgLoserTree << "\n";
+        std::cout << "Ratio: " << ratio << "\n\n";
     }
 
     return 0;
