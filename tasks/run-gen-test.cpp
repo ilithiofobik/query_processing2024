@@ -59,8 +59,22 @@ void loserTreeSort(std::vector<std::vector<T>>& vec, compare_count<T> comp,
     }
 }
 
+// Function to calculate OVC as defined
+int calculateOVC(const std::tuple<int, int, int, int, int>& a,
+                 const std::tuple<int, int, int, int, int>& b) {
+    int index = 1;
+    for (int i = 0; i < 5; ++i) {
+        if (std::get<i>(a) != std::get<i>(b)) {
+            return 100 * (1 + index) -
+                   std::abs(std::get<i>(a) - std::get<i>(b));
+        }
+        ++index;
+    }
+    return 0;  // Tuples are identical
+}
+
 int main() {
-    std::vector<int> runSizes = {1024, 32768, 1048576};
+    std::vector<int> runSizes = {1000, 10000, 100000, 1000000};
     int numOfTests = 100;
 
     for (int n : runSizes) {
