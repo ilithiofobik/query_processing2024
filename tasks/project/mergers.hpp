@@ -2,8 +2,10 @@
 #include <queue>
 #include <vector>
 
-#include "count-comparer.hpp"
+#include "compare_count.hpp"
 #include "loser-tree.hpp"
+
+#pragma once
 
 // Merge runs using standard priority queue
 void mergeStandardPQ(const std::vector<std::vector<int>>& runs,
@@ -43,7 +45,7 @@ void mergeStandardPQ(const std::vector<std::vector<int>>& runs,
 
 // Merge runs using tree-of-losers priority queue
 std::vector<int> mergeLoserTreePQ(const std::vector<std::vector<int>>& runs,
-                                  compare_count<int> comp) {
+                                  compare_count<std::tuple<int>> comp) {
     LoserTree lt(runs, comp);
     std::vector<int> result;
     int previous = -1;

@@ -2,8 +2,8 @@
 #include <queue>
 #include <vector>
 
-#include "mergers.hpp"
-#include "sorted-runs.hpp"
+#include "project/mergers.hpp"
+#include "project/sorted_runs.hpp"
 
 int main() {
     std::vector<int> runSizes = {1000, 10000, 100000, 1000000};

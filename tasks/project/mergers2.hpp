@@ -2,9 +2,11 @@
 #include <queue>
 #include <vector>
 
-#include "count-comparer.hpp"
+#include "compare_count.hpp"
 #include "loser-tree-ovc.hpp"
 #include "loser-tree.hpp"
+
+#pragma once
 
 // Merge runs using tree-of-losers priority queue
 std::vector<std::tuple<int, int, int, int, int>> mergeLoserTreePQOvc(

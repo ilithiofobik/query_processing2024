@@ -3,6 +3,11 @@
 #include <queue>
 #include <vector>
 
+#include "compare_count.hpp"
+#include "tuple_utils.hpp"
+
+#pragma once
+
 template <typename... Args>
 struct ExternalNode {
     std::tuple<Args...> value;
@@ -15,15 +20,6 @@ struct InternalNode {
         value;  // loser for all nodes but the root, root has global winner
     size_t runNumber;
 };
-
-template <unsigned I = 0, typename... Args>
-constexpr inline static void setToValue(std::tuple<Args...>& tuple,
-                                        uint64_t value) {
-    if constexpr (I < sizeof...(Args)) {
-        get<I>(tuple) = value;
-        setToValue<I + 1>(tuple, value);
-    }
-}
 
 // Tree of Losers class
 template <typename... Args>

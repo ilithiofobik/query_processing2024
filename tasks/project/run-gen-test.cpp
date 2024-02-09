@@ -4,6 +4,8 @@
 #include "mergers.hpp"
 #include "sorted-runs.hpp"
 
+#pragma once
+
 template <typename T>
 void quicksortRec(std::vector<T>& vec, int low, int high,
                   compare_count<T> comp) {

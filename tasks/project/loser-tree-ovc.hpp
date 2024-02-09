@@ -3,22 +3,9 @@
 #include <queue>
 #include <vector>
 
-template <unsigned I = 0, typename... Args>
-constexpr inline static uint64_t calc_ovc(const std::tuple<Args...>& tuple1,
-                                          const std::tuple<Args...>& tuple2) {
-    if constexpr (I == sizeof...(Args)) {
-        return 0;
-    } else {
-        auto val1 = get<I>(tuple1);
-        auto val2 = get<I>(tuple2);
-        if (val1 != val2 || I == sizeof...(Args) - 1) {
-            uint64_t v = (uint64_t)get<I>(tuple1);
-            return 1000 * (I + 1) - v;
-        } else {
-            return calc_ovc<I + 1>(tuple1, tuple2);
-        }
-    }
-}
+#include "tuple_utils.hpp"
+
+#pragma once
 
 template <typename... Args>
 struct ExternalNodeOvc {
@@ -33,15 +20,6 @@ struct InternalNodeOvc {
     size_t runNumber;
     uint64_t nodeOvc;
 };
-
-template <unsigned I = 0, typename... Args>
-constexpr inline static void setToValueOvc(std::tuple<Args...>& tuple,
-                                           uint64_t value) {
-    if constexpr (I < sizeof...(Args)) {
-        get<I>(tuple) = value;
-        setToValueOvc<I + 1>(tuple, value);
-    }
-}
 
 // Tree of Losers class
 template <typename... Args>
@@ -65,7 +43,7 @@ class LoserTreeOvc {
         external.reserve(size);
 
         maxTuple = {};
-        setToValueOvc(maxTuple, 1000);
+        setToValue(maxTuple, 1000);
 
         for (size_t i = 0; i < size; i++) {
             ExternalNodeOvc en = {runs[i][0], 0};

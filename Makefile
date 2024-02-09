@@ -25,13 +25,13 @@ endif
 
 ## select flags based on target
 ifeq ($(target),release)
-	CXXFLAGS += $(RELEASE_FLAGS) -O3
+	CXXFLAGS += $(RELEASE_FLAGS) -O0
 else ifeq ($(target),staging)
-	CXXFLAGS += $(DEBUG_FLAGS) -O3
+	CXXFLAGS += $(DEBUG_FLAGS) -O0
 else ifeq ($(target),sanitize)
-	CXXFLAGS += $(SANITIZE_FLAGS) $(DEBUG_FLAGS) -O3
+	CXXFLAGS += $(SANITIZE_FLAGS) $(DEBUG_FLAGS) -O0
 else
-	CXXFLAGS += $(DEBUG_FLAGS) -O3
+	CXXFLAGS += $(DEBUG_FLAGS) -O0
 endif
 
 ## rebuild w/o file changes if target changed
@@ -62,7 +62,7 @@ VARIANT_FLAG = -DVARIANT_$(variant) -DVARIANT_NAME=$(variant)
 
 ## special rules for query compiler
 $(BINDIR)/p2c-task-%.out: $(TARGET_MARKER) $(VARIANT_MARKER) $(SRCDIR)/p2c-task-%.cpp $(RSRCDIR)/queryFrame.cpp $(SRCDIR)/additionaloperators.hpp
-	$(CXX) -std=c++20 $(patsubst $(BINDIR)/p2c-task-%.out, $(SRCDIR)/p2c-task-%.cpp, $@) $(CXXFLAGS) $(VARIANT_FLAG) -O3 -g -o $(subst task,tmp,$@)
+	$(CXX) -std=c++20 $(patsubst $(BINDIR)/p2c-task-%.out, $(SRCDIR)/p2c-task-%.cpp, $@) $(CXXFLAGS) $(VARIANT_FLAG) -O0 -g -o $(subst task,tmp,$@)
 	cp $(RSRCDIR)/queryFrame.cpp $(BINDIR)/queryFrame.cpp
 	$(subst task,tmp,$@) | $(CODEGEN_COMMAND) $(BINDIR)/p2c-query.cpp
 	$(CXX) -std=c++20 $(BINDIR)/queryFrame.cpp $(CXXFLAGS) -DTASK_NAME="$(call get_task,$@)" $(VARIANT_FLAG) -o $@

@@ -1,5 +1,6 @@
+#pragma once
 
-// Function to count comparisons for std::priority_queue
+// Function to count comparisons
 template <typename T>
 struct compare_count {
     uint64_t& count;
@@ -9,3 +10,6 @@ struct compare_count {
         return a > b;  // sorts in ascending order
     }
 };
+
+// // Function to count comparisons for tuples
+// template <typename >

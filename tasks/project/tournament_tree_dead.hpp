@@ -3,12 +3,8 @@
 #include <tuple>
 #include <unordered_map>
 
-// the whole implementation is based on the paper
-// "Hardware Assited Sorting in IBM's DB2 DBMS"
-
-// for now defining node only for uint32_t
-// to be extended for more types
-// for now, simple conversion to uint32_t is used
+// This was the original code which was based on  "Hardware Assited Sorting in
+// IBM's DB2 DBMS" I rewrote all the structures based on other papers
 
 typedef uint32_t o_t;
 typedef uint32_t vc_t;
