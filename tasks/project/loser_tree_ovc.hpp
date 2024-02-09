@@ -3,56 +3,59 @@
 #include <queue>
 #include <vector>
 
-#include "compare_count.hpp"
 #include "tuple_utils.hpp"
 
 #pragma once
 
 template <typename... Args>
-struct ExternalNode {
+struct ExternalNodeOvc {
     std::tuple<Args...> value;
     size_t vectorIdx;
 };
 
 template <typename... Args>
-struct InternalNode {
-    std::tuple<Args...>
-        value;  // loser for all nodes but the root, root has global winner
+struct InternalNodeOvc {
+    std::tuple<Args...> value;
     size_t runNumber;
+    uint64_t nodeOvc;
 };
 
 // Tree of Losers class
 template <typename... Args>
-class LoserTree {
-    std::vector<ExternalNode<Args...>> external;  // Vector of internal nodes
-    std::vector<InternalNode<Args...>> internal;  // Vector of internal nodes
-    size_t size;                                  // Number of runs
-    compare_count<std::tuple<Args...>> comp;
-    std::tuple<Args...> maxTuple;
+class LoserTreeOvc {
+    std::vector<ExternalNodeOvc<Args...>> external;  // Vector of external nodes
+    std::vector<InternalNodeOvc<Args...>> internal;  // Vector of internal nodes
+    size_t size;                                     // Number of runs
+    compare_count_tuple<Args...> comp;               // Tuple comparison
+    compare_count<uint64_t> compOvc;                 // OVC comparison
+    std::tuple<Args...> maxTuple;                    // Maximum tuple
 
    public:
-    LoserTree(const std::vector<std::vector<std::tuple<Args...>>>& runs,
-              compare_count<std::tuple<Args...>> comp)
-        : size(runs.size()), comp(comp) {
+    LoserTreeOvc(const std::vector<std::vector<std::tuple<Args...>>>& runs,
+                 compare_count_tuple<Args...> comp,
+                 compare_count<uint64_t> compOvc)
+        : size(runs.size()), comp(comp), compOvc(compOvc) {
         // Allocate memory for internal and external nodes
         // Initialize the tree with the first elements of each run
 
-        internal.reserve(size);  // first half internal, second half external
+        internal.reserve(size);
         external.reserve(size);
 
         maxTuple = {};
         setToValue(maxTuple, 1000);
 
         for (size_t i = 0; i < size; i++) {
-            ExternalNode en = {runs[i][0], 0};
-            InternalNode in = {maxTuple, 0};  // Remove extra initializer values
+            ExternalNodeOvc en = {runs[i][0], 0};
+            InternalNodeOvc in = {maxTuple, 0, 0};
             external.push_back(en);
             internal.push_back(in);
         }
 
-        std::tuple<std::tuple<Args...>, size_t> winner = getSubtreeWinner(1);
+        std::tuple<std::tuple<Args...>, size_t, uint64_t> winner =
+            getSubtreeWinner(1);
         internal[0].value = std::get<0>(winner);
         internal[0].runNumber = std::get<1>(winner);
+        internal[0].nodeOvc = std::get<2>(winner);
     }
 
     // Extract the next element from the tree
@@ -75,28 +78,42 @@ class LoserTree {
         std::tuple<Args...> currentWinner = external[runNumber].value;
         size_t idx = (runNumber + size) / 2;
 
-        update(idx, currentWinner, runNumber);
+        auto currentWinnerOvc = calc_ovc(internal[idx].value, currentWinner);
+        update(idx, currentWinner, runNumber, currentWinnerOvc);
 
         return result;
     }
 
-    void update(size_t idx, std::tuple<Args...> currentWinner,
-                size_t runNumber) {
+    // Update after new leaf is added
+    void update(size_t idx, std::tuple<Args...> currentWinner, size_t runNumber,
+                uint64_t ovc) {
         if (idx == 0) {
             internal[idx].value = currentWinner;
             internal[idx].runNumber = runNumber;
+            internal[idx].nodeOvc = ovc;
             return;
         }
 
-        if (comp(currentWinner, internal[idx].value)) {
+        if (compOvc(internal[idx].nodeOvc, ovc)) {
             std::swap(currentWinner, internal[idx].value);
             std::swap(runNumber, internal[idx].runNumber);
+            std::swap(ovc, internal[idx].nodeOvc);
+        } else if (!compOvc(ovc, internal[idx].nodeOvc)) {
+            if (comp(internal[idx].value, currentWinner)) {
+                std::swap(currentWinner, internal[idx].value);
+                std::swap(runNumber, internal[idx].runNumber);
+                std::swap(ovc, internal[idx].nodeOvc);
+                internal[idx].nodeOvc =
+                    calc_ovc(internal[idx].value, currentWinner);
+            }
         }
 
-        update(idx / 2, currentWinner, runNumber);
+        update(idx / 2, currentWinner, runNumber, ovc);
     }
 
-    std::tuple<std::tuple<Args...>, size_t> getSubtreeWinner(size_t idx) {
+    // Get winner of the subtree, update the subtree
+    std::tuple<std::tuple<Args...>, size_t, uint64_t> getSubtreeWinner(
+        size_t idx) {
         // last layer, connected to external
         if (idx >= size / 2) {
             int leftIdx = idx * 2 - size;
@@ -105,19 +122,27 @@ class LoserTree {
             if (comp(external[leftIdx].value, external[rightIdx].value)) {
                 internal[idx].value = external[leftIdx].value;
                 internal[idx].runNumber = leftIdx;
+                internal[idx].nodeOvc =
+                    calc_ovc(external[leftIdx].value, external[rightIdx].value);
 
-                return {external[rightIdx].value, rightIdx};
+                return {external[rightIdx].value, rightIdx,
+                        internal[idx].nodeOvc};
             } else {
                 internal[idx].value = external[rightIdx].value;
                 internal[idx].runNumber = rightIdx;
+                internal[idx].nodeOvc =
+                    calc_ovc(external[leftIdx].value, external[rightIdx].value);
 
-                return {external[leftIdx].value, leftIdx};
+                return {external[leftIdx].value, leftIdx,
+                        internal[idx].nodeOvc};
             }
         }
 
         // we are in upper layers
         auto left = getSubtreeWinner(idx * 2);
         auto right = getSubtreeWinner(idx * 2 + 1);
+
+        internal[idx].nodeOvc = calc_ovc(std::get<0>(left), std::get<0>(right));
 
         if (comp(std::get<0>(right), std::get<0>(left))) {
             internal[idx].value = std::get<0>(right);
