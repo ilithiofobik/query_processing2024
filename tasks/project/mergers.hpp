@@ -44,13 +44,14 @@ void mergeStandardPQ(const std::vector<std::vector<int>>& runs,
 }
 
 // Merge runs using tree-of-losers priority queue
-std::vector<int> mergeLoserTreePQ(const std::vector<std::vector<int>>& runs,
-                                  compare_count<std::tuple<int>> comp) {
+std::vector<int> mergeLoserTreePQ(
+    const std::vector<std::vector<std::tuple<int>>>& runs,
+    compare_count<std::tuple<int>> comp) {
     LoserTree lt(runs, comp);
     std::vector<int> result;
     int previous = -1;
     while (!lt.empty()) {
-        int next = lt.next(runs);
+        int next = std::get<0>(lt.next(runs));
         result.push_back(next);
         if (next < previous) {
             std::cerr << "Error: " << next << " < " << previous << std::endl;

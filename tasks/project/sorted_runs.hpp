@@ -62,3 +62,19 @@ generateSortedTupleRuns(int runSize, int numRuns) {
 
     return runs;
 }
+
+template <typename... Args>
+std::vector<std::vector<std::tuple<Args...>>> generateGenericSortedTupleRuns(
+    int runSize, int numRuns) {
+    std::vector<std::vector<std::tuple<Args...>>> runs(
+        numRuns, std::vector<std::tuple<Args...>>(runSize));
+
+    for (auto& run : runs) {
+        for (auto& val : run) {
+            setToRand(val, 0, GLOBAL_MAX);
+        }
+        std::sort(run.begin(), run.end());
+    }
+
+    return runs;
+}

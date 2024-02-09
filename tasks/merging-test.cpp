@@ -16,9 +16,10 @@ int main() {
 
         for (int i = 0; i < numOfTests; i++) {
             auto runs = generateSortedRuns(n, numRuns);
+            auto runs2 = generateGenericSortedTupleRuns<int>(n, numRuns);
 
             mergeStandardPQ(runs, comparisonCountStandard);
-            mergeLoserTreePQ(runs, comparisonCountLoserTree);
+            mergeLoserTreePQ(runs2, comparisonCountLoserTree);
         }
 
         float avgStandard =
